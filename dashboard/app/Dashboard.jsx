@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
+import IrradianceSection from "./IrradianceSection";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, ReferenceArea,
 } from "recharts";
@@ -306,6 +307,7 @@ export default function Dashboard({ summary: s, daily, accuracy, inverterHealth,
       <LiveSection live={live} />
       <WeatherSection live={live} />
       <PlantNow live={live} />
+      <IrradianceSection live={live} />
       <Replay dates={replayDates} initial={initialReplay} />
       <div className="grid two">
         <DailyEnergy daily={daily} />

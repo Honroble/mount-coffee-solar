@@ -57,6 +57,7 @@ iv2,sts4_inv12_p,STS4.INV12.active_power_total,kW
 iv1,wx_ghi_sts1,FPE.PV.STS1.Pyranometer.up.irradiation_temp_compensated,W/m²
 iv1,wx_ghi_sts3,FPE.PV.STS3.Pyranometer.up.irradiation_temp_compensated,W/m²
 iv1,wx_alb_sts1,FPE.PV.STS1.Pyranometer.down.irradiation_temp_compensated,W/m²
+iv1,wx_alb_sts3,FPE.PV.STS3.Pyranometer.down.irradiation_temp_compensated,W/m²
 iv1,wx_tmod,FPE.PV.STS1.temperature.Temp01 - Module,°C
 iv1,wx_tamb,FPE.PV.STS1.temperature.Temp02 - Ambient,°C
 iv1,wx_soil1,FPE.PV.STS1.DustIQ.soiling_ratio_Sensor01,%

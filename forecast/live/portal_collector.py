@@ -207,6 +207,15 @@ def last_stamp(path):
     return None
 
 
+def file_channels(path):
+    try:
+        with open(path, encoding="latin-1", newline="") as fh:
+            head = next(csv.reader(fh, delimiter=";"))
+        return head[3:]
+    except Exception:
+        return None
+
+
 def append(live_dir, group, chmap_rows, header, body):
     channels = [m["local_channel"] for m in chmap_rows]
     units = [m["unit"] for m in chmap_rows]
@@ -226,6 +235,10 @@ def append(live_dir, group, chmap_rows, header, body):
         if last and ts <= last:
             continue
         new = not os.path.exists(path)
+        if not new:   # a channel added to channel_map during the day starts in tomorrow's file: keep today's columns
+            have = file_channels(path)
+            if have and have != channels:
+                vals = [(r[idx[c]] if c in idx and idx[c] < len(r) else "") for c in have]
         with open(path, "a", newline="", encoding="latin-1", errors="replace") as fh:
             w = csv.writer(fh, delimiter=";")
             if new:

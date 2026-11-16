@@ -101,13 +101,14 @@ def build(now):
     for i, ts in enumerate(H["time"]):
         t = parse_t(ts)
         a = aod_at(t)
-        per = {}
+        per, gti = {}, []
         for m in MODELS:
             g = (H.get(f"global_tilted_irradiance_{m}") or [None] * len(H["time"]))[i]
             ta = (H.get(f"temperature_2m_{m}") or [None] * len(H["time"]))[i]
             p = p_ac_kw(g, ta)
             if p is not None:
                 per[m] = p * factor(NEW_A, NEW_B, a) / 1000
+                gti.append(max(0.0, g))
                 models_used.add(m)
         if not per:
             continue
@@ -115,6 +116,7 @@ def build(now):
         hourly.append({"t": iso(t - timedelta(minutes=30)), "end": iso(t), "new": round(mean, 3),
                        "low": round(mean * NEW_LO, 3), "high": round(min(mean * NEW_HI, LIMIT_KW / 1000), 3),
                        "models": {LABELS[m]: round(min(v, LIMIT_KW / 1000), 3) for m, v in per.items()},
+                       "gti": round(sum(gti) / len(gti), 1),            # W/m², 10° south, mean of the models
                        "aod": a, "dust": dust.get(t.replace(minute=0))})
 
     # OLD: 15-min; value = mean of the 15 minutes ending at t, plotted at t - 7.5 min
@@ -126,7 +128,7 @@ def build(now):
         if p is None:
             continue
         v = min(p * factor(OLD_A, OLD_B, aod_at(t)), LIMIT_KW) / 1000
-        quarter.append({"t": iso(t - timedelta(minutes=7, seconds=30)), "old": round(v, 3),
+        quarter.append({"t": iso(t - timedelta(minutes=7, seconds=30)), "old": round(v, 3), "gti": round(max(0.0, g), 1),
                         "low": round(v * OLD_LO, 3), "high": round(min(v * OLD_HI, LIMIT_KW / 1000), 3)})
 
     # daily energy
@@ -284,10 +286,10 @@ def push_to_sheet(cfg, live, fc):
     for h in fc["hourly"]:
         olds = quarter_by_hour.get(h["end"], [])
         hourly.append([h["t"], h["end"], h["new"], h["low"], h["high"], round(sum(olds) / len(olds), 3) if olds else ""]
-                      + [h["models"].get(n, "") for n in names] + [h["aod"] if h["aod"] is not None else "", fc["issued"]])
+                      + [h["models"].get(n, "") for n in names] + [h["aod"] if h["aod"] is not None else "", fc["issued"], h.get("gti", "")])
     results = [
         post_sheet(cfg, {"action": "replace", "sheet": "WeatherHourly",
-                         "header": ["time_mid", "hour_end", "forecast_mw", "low_mw", "high_mw", "single_model_mw"] + names + ["aod", "issued"],
+                         "header": ["time_mid", "hour_end", "forecast_mw", "low_mw", "high_mw", "single_model_mw"] + names + ["aod", "issued", "gti_wm2"],
                          "rows": hourly}),
         post_sheet(cfg, {"action": "replace", "sheet": "WeatherDays",
                          "header": ["date", "forecast_mwh", "low_mwh", "high_mwh", "single_model_mwh", "issued"],

@@ -1,12 +1,15 @@
 // Everything the page shows that changes: live readings + the weather-model forecast.
 import { liveSnapshot, lanAddresses, SOURCE_URL } from "@/lib/live";
 import { nwpSnapshot } from "@/lib/nwp";
+import { irradianceSnapshot } from "@/lib/irradiance";
 
 function localSnapshot() {
   const live = liveSnapshot();
   let nwp = null;
   try { nwp = nwpSnapshot(); } catch (e) { nwp = { error: String(e) }; }
-  return { ...live, nwp };
+  let irradiance = null;
+  try { irradiance = irradianceSnapshot(); } catch (e) { irradiance = { error: String(e) }; }
+  return { ...live, nwp, irradiance };
 }
 
 export async function getLive() {
