@@ -197,10 +197,115 @@ def save(live, fc, now):
                   fh, separators=(",", ":"))
 
 
+
+# ---------------------------------------------------------------- Google Sheet (for the claude.ai dashboard)
+SENT = {655.35, 6553.5, 65535}
+
+
+def post_sheet(cfg, body):
+    url = cfg.get("sheet_webhook_url")
+    if not url or not cfg.get("sheet_token"):
+        return "no sheet configured"
+    data = json.dumps({"token": cfg["sheet_token"], **body}).encode("utf-8")
+    last = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "text/plain;charset=utf-8"})
+            with urllib.request.urlopen(req, timeout=90) as r:
+                return r.read().decode("utf-8", "replace")[:200]
+        except Exception as e:
+            last = e
+            time.sleep(15 * (attempt + 1))
+    return f"failed: {last}"
+
+
+def daily_actuals(live):
+    """Energy (sum of 1-min MW / 60), peak and minutes per day from the collector's iv2_live files."""
+    out = {}
+    for name in sorted(os.listdir(live)):
+        if not (name.startswith("iv2_live_") and name.endswith(".csv")):
+            continue
+        with open(os.path.join(live, name), encoding="latin-1", newline="") as fh:
+            rows = list(csv.reader(fh, delimiter=";"))
+        if not rows or "Information.Inverter sum P" not in rows[0]:
+            continue
+        k = rows[0].index("Information.Inverter sum P")
+        e = peak = 0.0
+        n = 0
+        date = None
+        for r in rows[1:]:
+            if not r or r[0].startswith("[") or len(r) <= k:
+                continue
+            try:
+                v = float(r[k].replace(",", "."))
+            except ValueError:
+                continue
+            if v in SENT or v < -0.1 or v > 20:
+                continue
+            dd, mm, yyyy = r[0].split(".")
+            date = f"{yyyy}-{mm}-{dd}"
+            e += max(v, 0) / 60
+            peak = max(peak, v)
+            n += 1
+        if date:
+            out[date] = (round(e, 1), round(peak, 2), n)
+    return out
+
+
+def scorecard_rows(live):
+    log = os.path.join(live, "nwp_daily_log.csv")
+    day_ahead, same_day = {}, {}
+    if os.path.exists(log):
+        with open(log, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                if r["issued_utc"][:10] < r["date"]:
+                    day_ahead[r["date"]] = r                    # last issue before the day
+                elif r["issued_utc"][:10] == r["date"] and r["date"] not in same_day:
+                    same_day[r["date"]] = r                     # first issue on the day
+    act = daily_actuals(live)
+    rows = []
+    for d in sorted(set(act) | set(day_ahead)):
+        a = act.get(d, ("", "", ""))
+        da, sd = day_ahead.get(d, {}), same_day.get(d, {})
+        num = lambda x: float(x) if x not in ("", None) else ""
+        rows.append([d, a[0], a[1], a[2], num(da.get("new_mwh")), num(da.get("low_mwh")), num(da.get("high_mwh")),
+                     num(da.get("old_mwh")), num(sd.get("new_mwh"))])
+    return rows[-120:]
+
+
+def push_to_sheet(cfg, live, fc):
+    names = list(LABELS.values())
+    quarter_by_hour = {}
+    for q in fc["quarter"]:
+        t = datetime.strptime(q["t"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=7, seconds=30)   # end of its 15 min
+        end = (t - timedelta(minutes=1)).replace(minute=0) + timedelta(hours=1)
+        quarter_by_hour.setdefault(end.strftime("%Y-%m-%dT%H:%M:00Z"), []).append(q["old"])
+    hourly = []
+    for h in fc["hourly"]:
+        olds = quarter_by_hour.get(h["end"], [])
+        hourly.append([h["t"], h["end"], h["new"], h["low"], h["high"], round(sum(olds) / len(olds), 3) if olds else ""]
+                      + [h["models"].get(n, "") for n in names] + [h["aod"] if h["aod"] is not None else "", fc["issued"]])
+    results = [
+        post_sheet(cfg, {"action": "replace", "sheet": "WeatherHourly",
+                         "header": ["time_mid", "hour_end", "forecast_mw", "low_mw", "high_mw", "single_model_mw"] + names + ["aod", "issued"],
+                         "rows": hourly}),
+        post_sheet(cfg, {"action": "replace", "sheet": "WeatherDays",
+                         "header": ["date", "forecast_mwh", "low_mwh", "high_mwh", "single_model_mwh", "issued"],
+                         "rows": [[d["date"], d["newMwh"], d["lowMwh"], d["highMwh"], d["oldMwh"], fc["issued"]] for d in fc["days"]]}),
+        post_sheet(cfg, {"action": "replace", "sheet": "WeatherAlerts", "header": ["kind", "time", "text", "issued"],
+                         "rows": [[a["kind"], a["time"], a["text"], fc["issued"]] for a in fc["alerts"]]}),
+        post_sheet(cfg, {"action": "replace", "sheet": "DailyEnergy",
+                         "header": ["date", "actual_mwh", "peak_mw", "minutes", "dayahead_mwh", "dayahead_low_mwh",
+                                    "dayahead_high_mwh", "dayahead_single_model_mwh", "sameday_mwh"],
+                         "rows": scorecard_rows(live)}),
+    ]
+    ok = sum('"ok":true' in r.replace(" ", "") for r in results)
+    return f"sheet {ok}/4" + ("" if ok == 4 else " " + " | ".join(r[:80] for r in results if '"ok":true' not in r.replace(" ", "")))
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
-    ap.add_argument("--print", action="store_true", help="print the daily summary")
+    ap.add_argument("--no-send", action="store_true", help="do not write to the Google Sheet")
     a = ap.parse_args()
     cfg = load_config(a.config)
     live = cfg["live_dir"]
@@ -209,7 +314,8 @@ def main():
     try:
         fc = build(now)
         save(live, fc, now)
-        msg = f"ok  models: {len(fc['modelsUsed'])}  days: " + "  ".join(f"{d['date']} {d['newMwh']} MWh" for d in fc["days"])
+        sheet = "not sent (--no-send)" if a.no_send else push_to_sheet(cfg, live, fc)
+        msg = f"ok  {sheet}  models: {len(fc['modelsUsed'])}  days: " + "  ".join(f"{d['date']} {d['newMwh']} MWh" for d in fc["days"])
     except Exception as e:
         msg = f"ERROR {e}"
     with open(os.path.join(live, "nwp_runs.txt"), "a", encoding="utf-8") as fh:
