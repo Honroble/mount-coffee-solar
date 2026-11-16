@@ -64,6 +64,47 @@ def send_to_sheet(cfg, row):
         return r.read().decode("utf-8", "replace")[:200]
 
 
+
+def _cell(v):
+    """CSV text back to the types the sheet had before (numbers, TRUE/FALSE); dates stay text."""
+    if v in ("True", "False"):
+        return v == "True"
+    if v == "" or ("-" in v and ":" in v):
+        return v
+    try:
+        x = float(v)
+        return int(x) if x.is_integer() and "." not in v else x
+    except ValueError:
+        return v
+
+
+def send_pending(cfg, live, logged):
+    """Send every logged forecast the sheet has not received yet (catches up after a failed send)."""
+    state = os.path.join(live, "sheet_last_sent.txt")
+    last = open(state, encoding="utf-8").read().strip() if os.path.exists(state) else ""
+    if not last and logged:          # first run with this version: earlier rows were already sent
+        last = logged[-2]["issued_utc"] if len(logged) > 1 else ""
+    pending, seen = [], set()
+    for r in logged:
+        k = r.get("issued_utc", "")
+        if k > last and k not in seen and r.get("model") != "none":
+            pending.append(r)
+            seen.add(k)
+    if not pending:
+        return "nothing new to send"
+    done = 0
+    for r in pending[-20:]:          # at most the last 5 hours in one run
+        try:
+            reply = send_to_sheet(cfg, [_cell(r.get(k, "")) for k in FIELDS])
+        except Exception as e:
+            return f"sent {done}, then failed: {e}"
+        if '"ok":true' not in reply.replace(" ", ""):
+            return f"sent {done}, then sheet replied: {reply[:120]}"
+        done += 1
+        with open(state, "w", encoding="utf-8") as fh:
+            fh.write(r["issued_utc"])
+    return f"sent {done} row(s)"
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -110,18 +151,26 @@ def main():
         if isinstance(v, float) and v != v:
             row[k] = ""
     log = os.path.join(live, "forecast_log.csv")
-    new = not os.path.exists(log)
-    with open(log, "a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=FIELDS)
-        if new:
-            w.writeheader()
-        w.writerow(row)
+    logged = []
+    if os.path.exists(log):
+        with open(log, newline="", encoding="utf-8") as fh:
+            logged = list(csv.DictReader(fh))
+    # A run that starts late (PC asleep, busy) can find the same 15-minute block as the run before: log it once.
+    duplicate = bool(logged) and logged[-1].get("issued_utc") == row["issued_utc"] and row["model"] != "none"
+    if not duplicate:
+        new = not os.path.exists(log)
+        with open(log, "a", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=FIELDS)
+            if new:
+                w.writeheader()
+            w.writerow(row)
+        logged.append({k: str(v) for k, v in row.items()})
     sent = "not sent (--no-send)"
     if not a.no_send:
-        try:
-            sent = send_to_sheet(cfg, [row[k] for k in FIELDS])
-        except Exception as e:
-            sent = f"send failed: {e}"
+        sent = send_pending(cfg, live, logged)
+    with open(os.path.join(live, "forecast_runs.txt"), "a", encoding="utf-8") as fh:
+        fh.write(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC  {row['issued_utc']}  {row['status'][:120]}"
+                 f"{'  (duplicate, not logged again)' if duplicate else ''}  sheet: {sent}\n")
     print(json.dumps(row), "|", sent)
 
 
