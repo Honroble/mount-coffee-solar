@@ -17,7 +17,7 @@ param([switch]$Uninstall, [ValidateSet("portal", "api")][string]$Source = "porta
 $ErrorActionPreference = "Continue"
 $live = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $live
-$names = @("MCSolar Collector", "MCSolar Forecast", "MCSolar Retrain", "MCSolar Weather Models")
+$names = @("MCSolar Collector", "MCSolar Forecast", "MCSolar Retrain", "MCSolar Weather Models", "MCSolar Alerts")
 
 if ($Uninstall) {
     foreach ($n in $names) { Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue }
@@ -86,6 +86,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # --- Scheduled tasks
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+$settingsLong = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 3) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $now = Get-Date
 $long = New-TimeSpan -Days 3650
 $every = if ($Source -eq "portal") { 5 } else { 1 }
@@ -93,19 +94,23 @@ $start1 = $now.Date.AddHours($now.Hour).AddMinutes([math]::Ceiling(($now.Minute 
 $q = [math]::Ceiling(($now.Minute + 1) / 15) * 15 + 8                                                  # 8 min after each quarter hour
 $start15 = $now.Date.AddHours($now.Hour).AddMinutes($q)
 $startH = $now.Date.AddHours($now.Hour + 1).AddMinutes(5)                                             # 5 min past each hour
+$startA = $now.Date.AddHours($now.Hour).AddMinutes([math]::Ceiling(($now.Minute + 1) / 15) * 15 + 11) # 11 min after each quarter hour
 
 $tasks = @(
     @{ Name = $names[0]; Script = $collector;           Trigger = (New-ScheduledTaskTrigger -Once -At $start1 -RepetitionInterval (New-TimeSpan -Minutes $every) -RepetitionDuration $long) },
     @{ Name = $names[1]; Script = "live_forecast.py";   Trigger = (New-ScheduledTaskTrigger -Once -At $start15 -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) },
     @{ Name = $names[2]; Script = "retrain_monthly.py"; Trigger = (New-ScheduledTaskTrigger -Weekly -WeeksInterval 4 -DaysOfWeek Sunday -At "22:00") },
-    @{ Name = $names[3]; Script = "nwp_forecast.py";    Trigger = (New-ScheduledTaskTrigger -Once -At $startH -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration $long) }
+    @{ Name = $names[3]; Script = "nwp_forecast.py";    Trigger = (New-ScheduledTaskTrigger -Once -At $startH -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration $long) },
+    @{ Name = $names[4]; Script = "alerts.py";          Trigger = (New-ScheduledTaskTrigger -Once -At $startA -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) }
 )
 foreach ($t in $tasks) {
     $action = New-ScheduledTaskAction -Execute $pyw -Argument ("`"" + (Join-Path $live $t.Script) + "`" --config `"" + $cfgPath + "`"") -WorkingDirectory $root
-    Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $t.Trigger -Settings $settings -Description "Mount Coffee solar forecast" -Force | Out-Null
+    Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $t.Trigger -Settings $(if ($t.Name -eq $names[2]) { $settingsLong } else { $settings }) -Description "Mount Coffee solar forecast" -Force | Out-Null
     Write-Host "Registered: $($t.Name)" -ForegroundColor Green
 }
 Write-Host ""
+Write-Host "Calibrating the weather-model forecast hour by hour against the logger (downloads past forecasts, about a minute)..."
+& $py (Join-Path $live "calibrate_nwp.py") --config $cfgPath
 Write-Host "Fetching the first weather-model forecast (hours to 3 days ahead)..."
 & $py (Join-Path $live "nwp_forecast.py") --config $cfgPath
 Write-Host ""

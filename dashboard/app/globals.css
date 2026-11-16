@@ -48,3 +48,28 @@ select { background: var(--panel); color: var(--text); border: 1px solid var(--l
 .alert.ramp { border-left-color: #f85149; background: rgba(248,81,73,.08); }
 .alert.reserve { border-left-color: #3fb6c9; background: rgba(63,182,201,.07); }
 code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
+
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
+.check { display: flex; gap: 10px; align-items: flex-start; background: #1b232c; border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; }
+.check .dot { margin-top: 6px; flex: none; }
+.dtable td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.dtable input[type=number], select { background: #0f1419; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; }
+.btn { background: #1f2a36; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; text-decoration: none; cursor: pointer; font: inherit; font-size: 13px; }
+.btn:hover { border-color: #f5a524; }
+.sixh { grid-template-columns: repeat(6, 1fr); margin: 6px 0 10px; }
+@media (max-width: 900px) { .sixh { grid-template-columns: repeat(3, 1fr); } }
+.kpi .label .dot { width: 8px; height: 8px; vertical-align: middle; }
+.tv { max-width: none; height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 18px 28px; font-size: 20px; }
+.tvhead { display: flex; justify-content: space-between; color: var(--muted); font-size: 20px; }
+.tvhead b { color: var(--text); font-size: 26px; }
+.tvgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.tvk { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+.tvl { color: var(--muted); font-size: 20px; }
+.tvv { font-size: 64px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tvv span { font-size: 22px; color: var(--muted); font-weight: 400; }
+.tvs { color: var(--muted); font-size: 18px; }
+.tvchart { flex: 1; min-height: 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.tvlegend { display: flex; gap: 24px; font-size: 18px; }
+.tvalerts { display: grid; gap: 6px; }
+.tva { background: rgba(248,81,73,.12); border-left: 4px solid var(--bad); padding: 8px 12px; border-radius: 6px; font-size: 20px; }
+.tvok { color: var(--good); font-size: 20px; }

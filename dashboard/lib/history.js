@@ -4,8 +4,18 @@ import daily from "@/data/history/daily.json";
 import accuracy from "@/data/history/accuracy.json";
 import inverters from "@/data/history/inverters.json";
 import frequency from "@/data/history/frequency.json";
+import reportDaily from "@/data/history/report_daily.json";
 
-export { replay15, daily, accuracy, inverters, frequency };
+export { replay15, daily, accuracy, inverters, frequency, reportDaily };
+
+// One row per day since commissioning: grid export (J07) from the monthly reports until 31 Oct, logger energy
+// (inverter side, about 1.9 % higher) after that.
+export function energySinceCommissioning() {
+  const out = new Map();
+  for (const r of reportDaily) out.set(r.date, { date: r.date, mwh: r.export_mwh, source: "J07 export (report)", outage: r.outage });
+  for (const d of daily) if (!out.has(d.date)) out.set(d.date, { date: d.date, mwh: d.energy_mwh, source: "logger", outage: d.status !== "Normal" });
+  return [...out.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+}
 
 export function summary() {
   const energy = daily.reduce((s, d) => s + (d.energy_mwh || 0), 0);

@@ -180,6 +180,45 @@ class Portal:
         raise RuntimeError(f"download_csv failed: HTTP {r.status_code} {r.headers.get('content-type')} at {r.url} | {page}")
 
 
+WIDGET_FIELDS = ["time_utc", "disk_used_pct", "disk_free_mb", "channels", "channel_errors",
+                 "zoneA_tamb_c", "zoneA_tmod_c", "zoneA_ghi_wm2", "zone4_tamb_c", "zone4_tmod_c", "zone4_ghi_wm2",
+                 "sts1_kw", "sts2_kw", "sts3_kw", "sts4_kw", "pv_sum_mw", "power_limit_user_pct", "power_setpoint_mw"]
+
+
+def read_widgets(p, cfg):
+    """Live values of the logger homepage (widget_update.json): disk, channel errors, zone sensors, station power, limits."""
+    r = p.s.post(f"{p.base}/widget_update.json", data={"config_id": cfg.get("widget_config_id", "1792744806"), "page": "-1"},
+                 timeout=60, headers={"Referer": f"{p.base}/start", "Origin": PORTAL})
+    r.raise_for_status()
+    j = r.json()
+    v = lambda i: (float(j[i]["v"]) if isinstance(j[i], dict) and j[i].get("v") not in (None, "") else None)
+    info = j[0] if j and isinstance(j[0], dict) else {}
+    lim = j[14] if len(j) > 14 and isinstance(j[14], list) else [{}, {}]
+    num = lambda d: float(d["v"]) if isinstance(d, dict) and d.get("v") not in (None, "") else None
+    return {
+        "time_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "disk_used_pct": round(100 * info.get("disk", {}).get("ratio", 0), 2) if info.get("disk") else None,
+        "disk_free_mb": info.get("disk", {}).get("free"),
+        "channels": info.get("channels", {}).get("count"), "channel_errors": info.get("channels", {}).get("errors"),
+        "zoneA_tamb_c": v(2), "zoneA_tmod_c": v(3), "zoneA_ghi_wm2": v(4),
+        "zone4_tamb_c": v(6), "zone4_tmod_c": v(7), "zone4_ghi_wm2": v(8),
+        "sts1_kw": v(9), "sts2_kw": v(10), "sts3_kw": v(11), "sts4_kw": v(12), "pv_sum_mw": v(13),
+        "power_limit_user_pct": num(lim[0]) if lim else None, "power_setpoint_mw": num(lim[1]) if len(lim) > 1 else None,
+    }
+
+
+def save_widgets(live_dir, w):
+    with open(os.path.join(live_dir, "widget_latest.json"), "w", encoding="utf-8") as fh:
+        json.dump(w, fh)
+    path = os.path.join(live_dir, "widget_log.csv")
+    new = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as fh:
+        wr = csv.writer(fh)
+        if new:
+            wr.writerow(WIDGET_FIELDS)
+        wr.writerow([w.get(k, "") if w.get(k) is not None else "" for k in WIDGET_FIELDS])
+
+
 def parse_csv(text):
     rows = [r for r in csv.reader(io.StringIO(text), delimiter=";") if r]
     if not rows:
@@ -259,6 +298,11 @@ def main():
     chmap = load_map()
     now = datetime.now(timezone.utc).replace(tzinfo=None, second=0, microsecond=0)
     beg = now - timedelta(minutes=a.minutes)
+    # after a gap (PC asleep or offline) ask for everything since the last saved minute, up to 12 hours back
+    last_saved = last_stamp(os.path.join(cfg["live_dir"], f"iv2_live_{now:%Y%m%d}.csv")) or \
+        last_stamp(os.path.join(cfg["live_dir"], f"iv2_live_{(now - timedelta(days=1)):%Y%m%d}.csv"))
+    if last_saved and last_saved < beg:
+        beg = max(last_saved, now - timedelta(hours=12))
     log_lines, status = [], 0
     try:
         p = Portal(cfg)
@@ -279,6 +323,12 @@ def main():
             missing = [m["local_channel"] for m in rows if m["local_channel"] not in header]
             n = append(cfg["live_dir"], group, rows, header, body)
             log_lines.append(f"{group}: +{n} rows" + (f", {len(missing)} channels missing" if missing else ""))
+        try:
+            w = read_widgets(p, cfg)
+            save_widgets(cfg["live_dir"], w)
+            log_lines.append(f"status: disk {w['disk_used_pct']} % used, {w['channel_errors']} channel errors, limit {w['power_limit_user_pct']} %")
+        except Exception as e:   # the homepage values are extra: never stop the collector for them
+            log_lines.append(f"status read failed: {e}")
         p.save()
     except Exception as e:
         log_lines.append(f"ERROR {e}")

@@ -52,6 +52,9 @@ def main():
             report.append(f"--- {name}\n{r.stdout.strip()}")
         else:
             report.append(f"--- {name} FAILED, old model kept\n{r.stderr.strip()[-1500:]}")
+    r = subprocess.run([sys.executable, os.path.join(HERE, "calibrate_nwp.py"), "--config", a.config],
+                       capture_output=True, text=True, timeout=900)
+    report.append("--- weather-model calibration\n" + (r.stdout or r.stderr).strip()[-800:])
     with open(os.path.join(live, "retrain_log.txt"), "a", encoding="utf-8") as fh:
         fh.write("\n".join(report) + "\n\n")
     print("\n".join(report))

@@ -2,6 +2,8 @@
 import { liveSnapshot, lanAddresses, SOURCE_URL } from "@/lib/live";
 import { nwpSnapshot } from "@/lib/nwp";
 import { irradianceSnapshot } from "@/lib/irradiance";
+import { healthSnapshot } from "@/lib/health";
+import { blend } from "@/lib/blend";
 
 function localSnapshot() {
   const live = liveSnapshot();
@@ -9,7 +11,11 @@ function localSnapshot() {
   try { nwp = nwpSnapshot(); } catch (e) { nwp = { error: String(e) }; }
   let irradiance = null;
   try { irradiance = irradianceSnapshot(); } catch (e) { irradiance = { error: String(e) }; }
-  return { ...live, nwp, irradiance };
+  let health = null;
+  try { health = healthSnapshot(); } catch (e) { health = { error: String(e) }; }
+  let best = null;
+  try { best = blend(live.latestForecast, nwp); } catch (e) { best = { error: String(e) }; }
+  return { ...live, nwp, irradiance, health, blend: best };
 }
 
 export async function getLive() {

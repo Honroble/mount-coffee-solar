@@ -88,7 +88,7 @@ function modelsToday(now) {
 }
 
 // Clear-sky horizontal irradiance (Haurwitz) with the NOAA sun position.
-function clearSkyGhi(t) {
+export function clearSkyGhi(t) {
   const rad = Math.PI / 180;
   const jd = t.getTime() / 86400000 + 2440587.5, n = jd - 2451545.0;
   const L = (280.46 + 0.9856474 * n) % 360, g = ((357.528 + 0.9856003 * n) % 360) * rad;

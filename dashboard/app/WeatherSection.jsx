@@ -41,7 +41,8 @@ export default function WeatherSection({ live }) {
     const actual = day === today ? live.actual.filter((a) => inDay(ms(a.t))).map((a) => ({ x: ms(a.t), mw: a.mw })) : [];
     const f = live.latestForecast;
     const nowcast = day === today && f ? [15, 30, 60].map((m) => ({ x: ms(f.issued) + m * 60000, mw: f[`p${m}`] })).filter((p) => p.mw !== null) : [];
-    return { hourly, quarter, actual, nowcast, from, to };
+    const best = day === today && live.blend?.points ? live.blend.points.filter((p) => inDay(ms(p.t))).map((p) => ({ x: ms(p.t), best: p.mw })) : [];
+    return { hourly, quarter, actual, nowcast, best, from, to };
   }, [fc, day, today, live]);
 
   if (!fc) {
@@ -65,7 +66,8 @@ export default function WeatherSection({ live }) {
         <div>
           <h2>Today and the next 2 days (weather models)</h2>
           <div className="sub">Hourly forecast from the average of {models.length} weather models with dust (AOD) correction, and the single-model 15-minute forecast.
-            Issued {hhmm(fc.issued)} UTC ({fc.ageMin} min ago), refreshed every hour.</div>
+            Issued {hhmm(fc.issued)} UTC ({fc.ageMin} min ago), refreshed every hour.
+            {fc.calibration ? ` Calibrated hour by hour on the logger (${fc.calibration.period[0]} – ${fc.calibration.period[1]}): out-of-sample error ${fc.calibration.mae.calibrated} MW vs ${fc.calibration.mae.harris_daily_factors} MW before.` : " Using the daily-energy calibration until the hourly calibration has run."}</div>
         </div>
         <label className="sub" style={{ cursor: "pointer" }}>
           <input type="checkbox" checked={showModels} onChange={(e) => setShowModels(e.target.checked)} /> show the {models.length} models
@@ -86,12 +88,23 @@ export default function WeatherSection({ live }) {
         </div>
       )}
 
+      {live.blend?.points?.length > 0 && (
+        <div className="grid sixh">
+          {[60, 120, 180, 240, 300, 360].map((m) => {
+            const p = live.blend.points.find((x) => Math.round((ms(x.t) - ms(live.blend.issued)) / 60000) === m);
+            return p ? (
+              <div className="kpi" key={m}><div className="label">+{m / 60} h · {hhmm(ms(p.t))}</div><div className="value" style={{ fontSize: 22 }}>{fmt(p.mw)}<span style={{ fontSize: 12, color: "#8b98a8" }}> MW</span></div><div className="note">{p.src}</div></div>
+            ) : null;
+          })}
+        </div>
+      )}
       <div className="legend">
         <span><i style={{ background: C.newF }} />Forecast, average of models (hourly)</span>
         <span><i style={{ background: "rgba(245,165,36,.25)", height: 8 }} />Likely range</span>
         <span><i style={{ borderTop: `2px dashed ${C.old}` }} />Single model (15 min)</span>
         {day === today && <span><i style={{ background: C.actual }} />Actual (5 min)</span>}
         {day === today && <span><i style={{ background: C.now, height: 8, width: 8, borderRadius: 4 }} />Plant-data forecast +15/30/60 min</span>}
+        {day === today && view.best.length > 0 && <span><i style={{ background: "#3fb950" }} />Best estimate, next 6 h (plant data, handing over to the models)</span>}
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
@@ -109,6 +122,7 @@ export default function WeatherSection({ live }) {
           ))}
           <Line data={view.hourly} dataKey="new" name="Forecast (average)" stroke={C.newF} strokeWidth={2.5} dot={{ r: 2 }} isAnimationActive={false} />
           {view.actual.length > 0 && <Line data={view.actual} dataKey="mw" name="Actual" stroke={C.actual} strokeWidth={2} dot={false} isAnimationActive={false} />}
+          {view.best.length > 0 && <Line data={view.best} dataKey="best" name="Best estimate (blend)" stroke="#3fb950" strokeWidth={2.5} strokeDasharray="1 0" dot={false} isAnimationActive={false} />}
           {view.nowcast.length > 0 && <Scatter data={view.nowcast} dataKey="mw" name="Plant-data forecast" fill={C.now} isAnimationActive={false} />}
         </ComposedChart>
       </ResponsiveContainer>

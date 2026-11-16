@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
 import IrradianceSection from "./IrradianceSection";
+import HealthSection from "./HealthSection";
+import DispatchPanel from "./DispatchPanel";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, ReferenceArea,
 } from "recharts";
@@ -203,6 +205,41 @@ function Replay({ dates, initial }) {
   );
 }
 
+function EnergyHistory({ rows, live }) {
+  const all = useMemo(() => {
+    const m = new Map(rows.map((r) => [r.date, r]));
+    for (const a of live.nwp?.recentActuals || []) if (!m.has(a.date) && a.source?.startsWith("logger (live)")) m.set(a.date, { date: a.date, mwh: a.mwh, source: "logger (live)", outage: false });
+    return [...m.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+  }, [rows, live]);
+  const months = useMemo(() => {
+    const g = new Map();
+    for (const r of all) { const k = r.date.slice(0, 7); const o = g.get(k) || { month: k, mwh: 0, days: 0, src: new Set() }; o.mwh += r.mwh; o.days += 1; o.src.add(r.source.split(" ")[0]); g.set(k, o); }
+    return [...g.values()];
+  }, [all]);
+  return (
+    <section className="panel">
+      <h2>Energy since commissioning</h2>
+      <div className="sub">MWh per day from 23 March 2026. Until 31 October: grid export at J07 from the monthly reports. After that: logger energy at the inverters (about 1.9 % higher). Red: confirmed outage days.</div>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={all} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+          {grid}
+          <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} {...axis} minTickGap={24} />
+          <YAxis {...axis} width={50} />
+          <Tooltip {...tip} formatter={(v, n, p) => [`${fmt(v, 1)} MWh (${p.payload.source})`, "Energy"]} />
+          <Bar dataKey="mwh" name="Energy" isAnimationActive={false}
+               shape={(p) => <rect x={p.x} y={p.y} width={Math.max(1, p.width)} height={p.height} fill={p.payload.outage ? C.bad : p.payload.source.startsWith("J07") ? C.f60 : C.f15} />} />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="legend"><span><i style={{ background: C.f60 }} />J07 export (report)</span><span><i style={{ background: C.f15 }} />Logger</span><span><i style={{ background: C.bad }} />Outage</span></div>
+      <div className="scroll" style={{ maxHeight: 220 }}>
+        <table><thead><tr><th>Month</th><th className="num">Energy (MWh)</th><th className="num">Days</th><th className="num">Average (MWh/day)</th><th>Source</th></tr></thead>
+          <tbody>{months.map((m) => <tr key={m.month}><td>{m.month}</td><td className="num">{fmt(m.mwh, 1)}</td><td className="num">{m.days}</td><td className="num">{fmt(m.mwh / m.days, 1)}</td><td className="sub">{[...m.src].join(" + ")}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function DailyEnergy({ daily }) {
   return (
     <section className="panel">
@@ -288,11 +325,14 @@ function Frequency({ rows }) {
   );
 }
 
-export default function Dashboard({ summary: s, daily, accuracy, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
+export default function Dashboard({ summary: s, daily, energyAll, accuracy, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
   const live = useLive(initialLive);
   return (
     <main>
-      <h1>Mount Coffee Solar – Forecast &amp; Plant Health</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h1>Mount Coffee Solar – Forecast &amp; Plant Health</h1>
+        <a className="btn" href="/tv">Control-room screen →</a>
+      </div>
       <div className="lead">Over {s.days} days of logger data the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b>. The 15-minute-ahead forecast misses by <b>{s.mae15} MW</b> on average, against {s.persist15} MW for simply repeating the last 15 minutes.</div>
       <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are UTC (= Monrovia time) · history {s.first} to {s.last}</div>
 
@@ -306,9 +346,12 @@ export default function Dashboard({ summary: s, daily, accuracy, inverterHealth,
 
       <LiveSection live={live} />
       <WeatherSection live={live} />
+      <DispatchPanel live={live} />
+      <HealthSection live={live} />
       <PlantNow live={live} />
       <IrradianceSection live={live} />
       <Replay dates={replayDates} initial={initialReplay} />
+      <EnergyHistory rows={energyAll} live={live} />
       <div className="grid two">
         <DailyEnergy daily={daily} />
         <Frequency rows={frequency} />

@@ -13,7 +13,16 @@ It collects live plant and weather data from the logger (read-only) and produces
   against the logger's daily energy (`forecast/live/nwp_forecast.py`). Method from J. A. Harris (Manager SCADA/EMS),
   calibrated on May–Oct 2026 daily energy. Weather data by Open-Meteo.com (CC BY 4.0).
 
-Both appear on the Next.js dashboard for operations and NLDC dispatch.
+Both appear on the Next.js dashboard for operations and NLDC dispatch, with:
+
+- a **best estimate for the next 6 hours** (plant-data forecast handing over to the weather models),
+- an hour-by-hour **calibration** of the weather models against the logger (`calibrate_nwp.py`, monthly),
+- a **dispatch check** (reserve margin vs largest loss, suggested solar cap, tie-line margin, synchronous share),
+- **plant health** checks (output vs satellite-implied output, inverters, pyranometers, logger disk/channels/limit),
+- an **irradiance** view (4 pyranometers, satellite over the plant and 20 km ring, weather models, clear sky),
+- **energy since commissioning** (J07 export from the monthly reports until 31 Oct, logger after),
+- a **control-room screen** at `/tv`,
+- **e-mail alerts and a daily summary** (`alerts.py` via the Google receiver).
 
 Current accuracy (blocked cross-validation, 17 Sep – 13 Nov 2026), mean absolute error in MW:
 
@@ -82,7 +91,7 @@ Ignored by `.gitignore`, but check before every commit:
 - [ ] Change the logger's default `admin` password, then run `python live\set_credentials.py` on the forecast PC.
 - [ ] Logger disk is ~96 % full; plan a data-file clean-up or upload.
 - [ ] Forecast range (P10–P90) and day-ahead forecast are not implemented yet.
-- [ ] Consider moving the live system from the PC to an always-on LEC server.
+- [ ] Move the live system from the PC to an always-on LEC server: see `docs/SERVER_SETUP.md`.
 - [ ] Recalibrate the weather-model factors hourly with the logger's 1-minute history (they are fitted on daily energy only).
 - [ ] Confirm site coordinates (6.52 N, −10.63 used for the weather models; 6.505 N, −10.648 in the plant-data model).
 - [ ] Plant issues from the 16 Nov review: horizontal sensors may read 10–20 % low (retrain the plant-data model if they

@@ -79,7 +79,16 @@ def iso(t):
     return t.strftime("%Y-%m-%dT%H:%M:00Z")
 
 
-def build(now):
+def load_calibration(live):
+    try:
+        with open(os.path.join(live, "nwp_calibration.json"), encoding="utf-8") as fh:
+            c = json.load(fh)
+        return c if c.get("use") else None
+    except Exception:
+        return None
+
+
+def build(now, cal=None):
     base = {"latitude": LAT, "longitude": LON, "tilt": TILT, "azimuth": AZIMUTH, "forecast_days": 3, "timezone": "GMT"}
     multi = get_json("https://api.open-meteo.com/v1/forecast",
                      {**base, "hourly": "global_tilted_irradiance,temperature_2m", "models": ",".join(MODELS)})
@@ -113,9 +122,18 @@ def build(now):
         if not per:
             continue
         mean = min(sum(per.values()) / len(per), LIMIT_KW / 1000)
-        hourly.append({"t": iso(t - timedelta(minutes=30)), "end": iso(t), "new": round(mean, 3),
-                       "low": round(mean * NEW_LO, 3), "high": round(min(mean * NEW_HI, LIMIT_KW / 1000), 3),
-                       "models": {LABELS[m]: round(min(v, LIMIT_KW / 1000), 3) for m, v in per.items()},
+        harris = mean
+        lo_f, hi_f = NEW_LO, NEW_HI
+        if cal and str(t.hour) in cal["a_by_hour_end"]:
+            # hour-by-hour calibration against the logger (calibrate_nwp.py): undo the daily factor, apply the hour's
+            f_old = factor(NEW_A, NEW_B, a)
+            pac = sum(per.values()) / len(per) / f_old
+            k = max(0.2, cal["a_by_hour_end"][str(t.hour)] - cal["b_aod"] * (a if a is not None else 0.3))
+            mean = min(pac * k, LIMIT_KW / 1000)
+            lo_f, hi_f = cal["q10_by_hour_end"][str(t.hour)], cal["q90_by_hour_end"][str(t.hour)]
+        hourly.append({"t": iso(t - timedelta(minutes=30)), "end": iso(t), "new": round(mean, 3), "harris": round(harris, 3),
+                       "low": round(mean * lo_f, 3), "high": round(min(mean * hi_f, LIMIT_KW / 1000), 3),
+                       "models": {LABELS[m]: round(min(v * (mean / harris if harris > 0 else 1), LIMIT_KW / 1000), 3) for m, v in per.items()},
                        "gti": round(sum(gti) / len(gti), 1),            # W/m², 10° south, mean of the models
                        "aod": a, "dust": dust.get(t.replace(minute=0))})
 
@@ -144,6 +162,7 @@ def build(now):
     return {"issued": iso(now), "location": {"lat": LAT, "lon": LON, "tilt": TILT, "azimuth": AZIMUTH},
             "modelsUsed": [LABELS[m] for m in MODELS if m in models_used], "hourly": hourly, "quarter": quarter,
             "days": day_list, "alerts": alerts(hourly, now),
+            "calibration": ({"fitted": cal["fitted_utc"], "period": cal["period"], "mae": cal["out_of_sample_mae_mw"]} if cal else None),
             "credit": "Weather data by Open-Meteo.com (CC BY 4.0); method: J. A. Harris, LEC SCADA/EMS"}
 
 
@@ -314,7 +333,7 @@ def main():
     os.makedirs(live, exist_ok=True)
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     try:
-        fc = build(now)
+        fc = build(now, load_calibration(live))
         save(live, fc, now)
         sheet = "not sent (--no-send)" if a.no_send else push_to_sheet(cfg, live, fc)
         msg = f"ok  {sheet}  models: {len(fc['modelsUsed'])}  days: " + "  ".join(f"{d['date']} {d['newMwh']} MWh" for d in fc["days"])
