@@ -1,0 +1,9 @@
+{
+  "portal_user": "",
+  "logger_user": "admin",
+  "device_id": "00:12:08:be:32:d9",
+  "sheet_webhook_url": "PASTE-THE-APPS-SCRIPT-WEB-APP-URL-HERE",
+  "sheet_token": "CHANGE-ME-to-the-same-secret-as-apps_script_receiver.gs",
+  "ras_api_key": "",
+  "live_dir": "../../data/live"
+}

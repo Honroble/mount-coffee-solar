@@ -1,0 +1,14 @@
+# secrets and local settings
+forecast/live/config.json
+*.secret
+.env*
+# data and trained models
+data/
+*.joblib
+*.csv.bak
+# python / node build output
+__pycache__/
+*.pyc
+node_modules/
+.next/
+*.log
