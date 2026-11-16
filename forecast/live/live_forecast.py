@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -59,9 +60,16 @@ def send_to_sheet(cfg, row):
     if not url:
         return "no sheet configured"
     body = json.dumps({"token": cfg.get("sheet_token", ""), "row": row}).encode("utf-8")
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:   # Apps Script answers with a redirect + JSON
-        return r.read().decode("utf-8", "replace")[:200]
+    last = None
+    for attempt in range(3):            # Google sometimes answers slowly or not at all: try 3 times
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "text/plain;charset=utf-8"})
+        try:
+            with urllib.request.urlopen(req, timeout=90) as r:   # Apps Script answers with a redirect + JSON
+                return r.read().decode("utf-8", "replace")[:200]
+        except Exception as e:
+            last = e
+            time.sleep(15 * (attempt + 1))
+    raise last
 
 
 
