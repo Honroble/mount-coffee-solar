@@ -88,6 +88,7 @@ function LiveSection({ live }) {
         </div>
       </div>
 
+      {live.sourceError && <div className="bad-text" style={{ marginBottom: 8 }}>{live.sourceError}. Check that the forecast PC is on and that you are on the same network (or VPN).</div>}
       {f && f.status && f.status !== "ok" && <div className="warn-text" style={{ marginBottom: 8 }}>Forecast status: {f.status}</div>}
 
       <div className="grid big">
@@ -312,7 +313,10 @@ export default function Dashboard({ summary: s, daily, accuracy, inverterHealth,
         <Accuracy rows={accuracy} />
         <InverterHealth rows={inverterHealth} />
       </div>
-      <div className="sub" style={{ marginTop: 16 }}>Page refreshes live data every minute. Live files: {live.liveDir}</div>
+      <div className="sub" style={{ marginTop: 16 }}>
+        Page refreshes live data every minute. Live data from: {live.source === "this PC" || !live.source ? `this PC (${live.liveDir})` : `forecast PC ${live.source}`}.
+        {live.servedFrom?.length ? <> Open this dashboard from another PC: {live.servedFrom.join("  ·  ")}</> : null}
+      </div>
     </main>
   );
 }

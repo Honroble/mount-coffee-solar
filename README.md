@@ -50,6 +50,11 @@ mcsolar/
   `powershell -NoProfile -ExecutionPolicy Bypass -File .\live\install_live_tasks.ps1` from `forecast\`.
 - **Dashboard:** double-click `dashboard\SETUP_DASHBOARD.bat` (installs Node.js if needed), then open http://localhost:3000.
   For development: `cd dashboard && npm install && npm run dev`. Set `MCSOLAR_LIVE_DIR` to point at a `data/live` folder.
+- **Dashboard on a colleague's PC:** clone this repo, double-click `dashboard\SETUP_DASHBOARD.bat` and, when asked,
+  enter the forecast PC's address shown at the bottom of its dashboard (e.g. `http://10.0.0.25:3000`). The colleague then
+  opens http://localhost:3000 on their own PC: history comes from the repo, live data from the forecast PC.
+  Colleagues can also just open the forecast PC's address in a browser. Both need the LEC network (or VPN); the forecast
+  PC's setup opens port 3000 in Windows Firewall for Domain/Private networks only.
 - **GridSense page:** open `gridsense/solar-forecast.html`; set `SHEET_CSV_URL` in its `CONFIG` block.
 
 ## Secrets – never commit these
@@ -69,6 +74,7 @@ Ignored by `.gitignore`, but check before every commit:
 - [ ] Logger disk is ~96 % full; plan a data-file clean-up or upload.
 - [ ] Forecast range (P10–P90) and day-ahead forecast are not implemented yet.
 - [ ] Consider moving the live system from the PC to an always-on LEC server.
+- [ ] Colleagues outside the LEC network: decide on a private VPN (e.g. Tailscale) rather than exposing port 3000 to the internet.
 
 ## Working together
 

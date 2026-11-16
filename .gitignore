@@ -3,7 +3,8 @@ forecast/live/config.json
 *.secret
 .env*
 # data and trained models
-data/
+/data/
+forecast/data/
 *.joblib
 *.csv.bak
 # python / node build output

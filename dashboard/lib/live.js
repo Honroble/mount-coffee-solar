@@ -4,6 +4,7 @@
 //   <liveDir>/iv1_live_YYYYMMDD.csv      weather station, 1-minute
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 export const LIVE_DIR = process.env.MCSOLAR_LIVE_DIR || path.join(process.cwd(), "..", "data", "live");
 const SENTINELS = new Set([655.35, 6553.5, 65535]);
@@ -142,4 +143,31 @@ export function liveSnapshot() {
     } : null,
     actual, forecasts, latestForecast: forecasts.at(-1) ?? null, inverters, weather,
   };
+}
+
+// Addresses other PCs can use to open this dashboard (shown in the page footer).
+export function lanAddresses() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces()))
+    for (const a of list || [])
+      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254.")) out.push(`http://${a.address}:3000`);
+  return out;
+}
+
+// On a collaborator's PC there is no data/live folder: set MCSOLAR_SOURCE_URL (in .env.local) to the
+// forecast PC's dashboard, e.g. http://10.0.0.25:3000, and the live data is read from there.
+export const SOURCE_URL = (process.env.MCSOLAR_SOURCE_URL || "").replace(/\/+$/, "");
+
+export async function getLive() {
+  if (!SOURCE_URL) return { ...liveSnapshot(), source: "this PC", servedFrom: lanAddresses() };
+  try {
+    const r = await fetch(`${SOURCE_URL}/api/live`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    return { ...j, source: SOURCE_URL, servedFrom: lanAddresses() };
+  } catch (e) {
+    const local = liveSnapshot();
+    return { ...local, source: SOURCE_URL, sourceError: `Cannot reach the forecast PC at ${SOURCE_URL} (${e.message})`,
+             servedFrom: lanAddresses() };
+  }
 }
