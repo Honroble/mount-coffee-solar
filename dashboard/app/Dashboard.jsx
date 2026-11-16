@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import WeatherSection from "./WeatherSection";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, ReferenceArea,
 } from "recharts";
@@ -292,7 +293,7 @@ export default function Dashboard({ summary: s, daily, accuracy, inverterHealth,
     <main>
       <h1>Mount Coffee Solar – Forecast &amp; Plant Health</h1>
       <div className="lead">Over {s.days} days of logger data the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b>. The 15-minute-ahead forecast misses by <b>{s.mae15} MW</b> on average, against {s.persist15} MW for simply repeating the last 15 minutes.</div>
-      <div className="sub">LEC Mount Coffee PV plant · 20 MW DC / 16.64 MW AC · 52 inverters in STS1–STS4 · times are UTC (= Monrovia time) · history {s.first} to {s.last}</div>
+      <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are UTC (= Monrovia time) · history {s.first} to {s.last}</div>
 
       <div className="grid kpis">
         <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" />
@@ -303,6 +304,7 @@ export default function Dashboard({ summary: s, daily, accuracy, inverterHealth,
       </div>
 
       <LiveSection live={live} />
+      <WeatherSection live={live} />
       <PlantNow live={live} />
       <Replay dates={replayDates} initial={initialReplay} />
       <div className="grid two">

@@ -1,10 +1,19 @@
 # Mount Coffee Solar – Output Forecast & Monitoring
 
-LEC SCADA/EMS project for the 20 MW DC / 16.64 MW AC Mount Coffee PV plant (52 × 320 kW inverters in STS1–STS4,
-Gantner Q.reader logger "LEC – Mount Coffee Liberia – QRC").
+LEC SCADA/EMS project for the Mount Coffee PV plant: 21.17 MWp DC / 17.79 MWac, export limit 16.64 MW (plant
+controller setpoint), 52 × 320 kW inverters in STS1–STS4, fixed 10° south-facing panels, 22 kV connection,
+Gantner Q.reader logger "LEC – Mount Coffee Liberia – QRC".
 
-It collects live plant and weather data from the logger (read-only), forecasts plant output 15, 30 and 60 minutes
-ahead every 15 minutes, and shows the results on dashboards for operations and NLDC dispatch.
+It collects live plant and weather data from the logger (read-only) and produces two forecasts:
+
+- **Short term (plant data):** 15, 30 and 60 minutes ahead every 15 minutes, from the logger's 1-minute data, the weather
+  station and satellite irradiance (`forecast/live/live_forecast.py`).
+- **Hours to 3 days (weather models):** every hour, the average of 6 Open-Meteo weather models with a dust (AOD)
+  correction plus the single-model 15-minute forecast, with ramp / reserve / model-split alerts and a day-ahead scorecard
+  against the logger's daily energy (`forecast/live/nwp_forecast.py`). Method from J. A. Harris (Manager SCADA/EMS),
+  calibrated on May–Oct 2026 daily energy. Weather data by Open-Meteo.com (CC BY 4.0).
+
+Both appear on the Next.js dashboard for operations and NLDC dispatch.
 
 Current accuracy (blocked cross-validation, 17 Sep – 13 Nov 2026), mean absolute error in MW:
 
@@ -74,6 +83,12 @@ Ignored by `.gitignore`, but check before every commit:
 - [ ] Logger disk is ~96 % full; plan a data-file clean-up or upload.
 - [ ] Forecast range (P10–P90) and day-ahead forecast are not implemented yet.
 - [ ] Consider moving the live system from the PC to an always-on LEC server.
+- [ ] Recalibrate the weather-model factors hourly with the logger's 1-minute history (they are fitted on daily energy only).
+- [ ] Confirm site coordinates (6.52 N, −10.63 used for the weather models; 6.505 N, −10.648 in the plant-data model).
+- [ ] Plant issues from the 16 Nov review: horizontal sensors may read 10–20 % low (retrain the plant-data model if they
+      are recalibrated); STS1 INV03/INV14 duplicate Modbus address; PQM-1 CT/VT ratios unset; feeder relay P07 lost
+      phase-C voltage; PQM-2/PQM-3 dead; STS3 meteo station silent; STS3/STS4 gauge scale 4,928 instead of 4,224 kW.
+- [ ] Optional dispatch panel: reserve margin vs largest loss, recommended solar cap (`PowerLimit_User`), tie-line margin.
 - [ ] Colleagues outside the LEC network: decide on a private VPN (e.g. Tailscale) rather than exposing port 3000 to the internet.
 
 ## Working together

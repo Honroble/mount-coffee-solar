@@ -39,3 +39,12 @@ td.num, th.num { text-align: right; }
 select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
 .scroll { max-height: 340px; overflow: auto; }
 .bad-text { color: var(--bad); } .warn-text { color: var(--warn); }
+
+.daycards { grid-template-columns: repeat(3, 1fr); margin-bottom: 10px; }
+.daycard { text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.daycard.sel { border-color: #f5a524; box-shadow: 0 0 0 1px #f5a524 inset; }
+.alerts { display: grid; gap: 6px; margin: 4px 0 8px; }
+.alert { padding: 7px 10px; border-radius: 6px; font-size: 13px; border-left: 3px solid #d29922; background: rgba(210,153,34,.08); }
+.alert.ramp { border-left-color: #f85149; background: rgba(248,81,73,.08); }
+.alert.reserve { border-left-color: #3fb6c9; background: rgba(63,182,201,.07); }
+code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }

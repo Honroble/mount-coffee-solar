@@ -158,16 +158,3 @@ export function lanAddresses() {
 // forecast PC's dashboard, e.g. http://10.0.0.25:3000, and the live data is read from there.
 export const SOURCE_URL = (process.env.MCSOLAR_SOURCE_URL || "").replace(/\/+$/, "");
 
-export async function getLive() {
-  if (!SOURCE_URL) return { ...liveSnapshot(), source: "this PC", servedFrom: lanAddresses() };
-  try {
-    const r = await fetch(`${SOURCE_URL}/api/live`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    return { ...j, source: SOURCE_URL, servedFrom: lanAddresses() };
-  } catch (e) {
-    const local = liveSnapshot();
-    return { ...local, source: SOURCE_URL, sourceError: `Cannot reach the forecast PC at ${SOURCE_URL} (${e.message})`,
-             servedFrom: lanAddresses() };
-  }
-}

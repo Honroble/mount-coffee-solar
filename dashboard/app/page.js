@@ -1,6 +1,6 @@
 import Dashboard from "./Dashboard";
 import { summary, daily, accuracy, inverters, frequency, replayDates, replayDay } from "@/lib/history";
-import { getLive } from "@/lib/live";
+import { getLive } from "@/lib/snapshot";
 
 export const dynamic = "force-dynamic";
 
