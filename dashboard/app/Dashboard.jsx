@@ -329,8 +329,14 @@ export default function Dashboard({ summary: s, daily, energyAll, accuracy, inve
   const live = useLive(initialLive);
   return (
     <main>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <h1>Mount Coffee Solar – Forecast &amp; Plant Health</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div className="brand">
+          <img src="/lec-logo.png" alt="Liberia Electricity Corporation" width={56} height={56} />
+          <div>
+            <div className="org">Liberia Electricity Corporation · SCADA/EMS</div>
+            <h1>Mount Coffee Solar – Forecast &amp; Plant Health</h1>
+          </div>
+        </div>
         <a className="btn" href="/tv">Control-room screen →</a>
       </div>
       <div className="lead">Over {s.days} days of logger data the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b>. The 15-minute-ahead forecast misses by <b>{s.mae15} MW</b> on average, against {s.persist15} MW for simply repeating the last 15 minutes.</div>

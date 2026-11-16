@@ -31,7 +31,7 @@ export default function TvScreen({ initial }) {
   return (
     <main className="tv">
       <div className="tvhead">
-        <div><b>Mount Coffee Solar</b> · 21.17 MWp · export limit 16.64 MW</div>
+        <div className="tvbrand"><img src="/lec-logo.png" alt="LEC" width={44} height={44} /><span><b>Mount Coffee Solar</b> · 21.17 MWp · export limit 16.64 MW</span></div>
         <div>{clock.toISOString().slice(11, 19)} UTC · data {age === null ? "—" : `${age} min old`}</div>
       </div>
       <div className="tvgrid">
