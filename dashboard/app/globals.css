@@ -81,3 +81,5 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .tvhead { align-items: center; }
 .lowwarn { background: rgba(248,81,73,.18); border: 1px solid var(--bad); border-left: 6px solid var(--bad); color: var(--text); padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; animation: lowpulse 2s ease-in-out infinite; }
 @keyframes lowpulse { 50% { background: rgba(248,81,73,.32); } }
+.tvback { color: var(--muted); text-decoration: none; font-size: 16px; border: 1px solid #30363d; border-radius: 8px; padding: 6px 12px; margin-right: 4px; }
+.tvback:hover { color: var(--text); border-color: var(--muted); }

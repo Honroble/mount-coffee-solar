@@ -23,6 +23,11 @@ export default function TvScreen({ initial }) {
   const best = (live.blend?.points || []).filter((p) => ms(p.t) <= to).map((p) => ({ x: ms(p.t), best: p.mw }));
   const today = live.nwp?.actualToday;
   const todayFc = live.nwp?.forecast?.days?.find((d) => d.date === day);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") window.location.href = "/"; };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const lowWarn = lowForecastWarning(live.latestForecast, live.now);
   const alerts = [...(lowWarn ? [`LOW OUTPUT FORECAST · ${lowWarn}`] : []), ...(live.nwp?.forecast?.alerts || []).filter((a) => a.time.slice(0, 10) >= day && a.kind !== "reserve").map((a) => a.text),
     ...(live.health?.checks || []).filter((c) => c.state === "bad").map((c) => `${c.label}: ${c.text}`)];
@@ -33,7 +38,7 @@ export default function TvScreen({ initial }) {
   return (
     <main className="tv">
       <div className="tvhead">
-        <div className="tvbrand"><img src="/lec-logo.png" alt="LEC" width={44} height={44} /><span><b>Mount Coffee Solar</b> · 21.17 MWp · export limit 16.64 MW</span></div>
+        <div className="tvbrand"><a className="tvback" href="/" title="Back to the dashboard">← Dashboard</a><img src="/lec-logo.png" alt="LEC" width={44} height={44} /><span><b>Mount Coffee Solar</b> · 21.17 MWp · export limit 16.64 MW</span></div>
         <div>{clock.toISOString().slice(11, 19)} UTC · data {age === null ? "—" : `${age} min old`}</div>
       </div>
       <div className="tvgrid">
