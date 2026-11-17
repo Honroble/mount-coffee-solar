@@ -1,4 +1,5 @@
 "use client";
+import SystemBanner from "../SystemBanner";
 import { useNow } from "../LiveNow";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useState } from "react";
@@ -40,6 +41,7 @@ export default function TvScreen({ initial }) {
   );
   return (
     <main className="tv">
+      <SystemBanner />
       <div className="tvhead">
         <div className="tvbrand"><a className="tvback" href="/" title="Back to the dashboard">← Dashboard</a><img src="/lec-logo.png" alt="LEC" width={44} height={44} /><span><b>Mount Coffee Solar</b> · 21.17 MWp · export limit 16.64 MW</span></div>
         <div>{clock.toISOString().slice(11, 19)} GMT · data {age === null ? "—" : `${age} min old`}</div>

@@ -3,6 +3,7 @@
 // whenever no Anthropic API key is set.
 import { runTool } from "@/lib/agent/tools";
 import { clearSkyGhi } from "@/lib/irradiance";
+import { kpiDays, kpiSummary } from "@/lib/kpi";
 
 const f1 = (v, d = 1) => (v === null || v === undefined || Number.isNaN(Number(v)) ? "—" : Number(v).toFixed(d));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -16,6 +17,7 @@ export const TOPICS = {
   inverters: "Inverters",
   alerts: "Alerts",
   health: "Plant health",
+  performance: "PR & losses",
 };
 
 async function status() {
@@ -91,6 +93,20 @@ async function health() {
   return ["Plant health checks:", ...(s.health_checks || []).map((c) => `${icon[c.state] || "·"} ${c.check}: ${c.detail || ""}`)].join("\n");
 }
 
+async function performance(date) {
+  const days = kpiDays();
+  const d = (date && days.find((x) => x.date === date)) || days.at(-1);
+  if (!d) return "No KPI data yet (kpi.py has not run).";
+  const s = kpiSummary(days).last30, L = d.losses_mwh;
+  const out = [`Performance ${d.date}${d.minutes < 1300 ? " (part day)" : ""}`,
+    `PR ${f1(d.pr_pct)} % (temperature-corrected ${f1(d.pr_temp_pct)} %) · 30-day ${f1(s.pr)} %`,
+    `Availability ${f1(d.availability_pct)} % · specific yield ${f1(d.specific_yield, 2)} kWh/kWp · sunlight ${f1(d.insolation_kwh_m2, 2)} kWh/m² · soiling ratio ${f1(d.soiling_ratio_pct)} %`,
+    `Clear sky ${f1(L.clear_sky)} MWh → cloud ${f1(L.cloud)} · clipping ${f1(L.clipping)} · curtailment ${f1(L.curtailment)} · outage ${f1(L.plant_outage)} · inverters down ${f1(L.inverters_down)} · soiling ${f1(L.soiling)} · other ${f1(L.other)} → produced ${f1(L.actual)} MWh`];
+  if (d.outage_minutes) out.push(`Plant stopped in daylight for ${d.outage_minutes} min.`);
+  if (d.weakest_inverters?.length) out.push(`Lowest availability: ${d.weakest_inverters.map((w) => `${w.inverter} ${w.availability_pct} %`).join(", ")}`);
+  return out.join("\n");
+}
+
 export async function quickAnswer(topic) {
   switch (topic) {
     case "status": return status();
@@ -100,6 +116,7 @@ export async function quickAnswer(topic) {
     case "inverters": return inverters();
     case "alerts": return alerts();
     case "health": return health();
+    case "performance": return performance();
     default: return `Pick one of: ${Object.keys(TOPICS).join(", ")}`;
   }
 }
@@ -117,6 +134,8 @@ export async function quickReport(period) {
     acc ? `Forecast ${day}: +15 min missed by ${acc.mae_mw} MW on average (repeat-last ${acc.repeat_last_mae_mw} MW, ${acc.n} forecasts)` : "Forecast accuracy: not enough data",
     "",
     await forecast(),
+    "",
+    await performance(day),
     "",
     await inverters(),
     "",

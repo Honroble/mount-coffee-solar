@@ -2,6 +2,8 @@
 import { useNow } from "./LiveNow";
 import HourlyPeak from "./HourlyPeak";
 import AskAI from "./AskAI";
+import SystemBanner from "./SystemBanner";
+import PerformanceSection from "./PerformanceSection";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -387,6 +389,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
           <a className="btn" href="/tv">Control-room screen →</a>
         </div>
       </div>
+      <SystemBanner />
       <div className="lead">From {s.first} to {s.last} the logger recorded <b>{s.energy_mwh.toLocaleString()} MWh</b> over {s.days} days with data
         (average normal day {s.avg_day_mwh} MWh; highest output {s.peak_mw} MW on {s.peak_day}). The forecast, issued every 5 minutes, misses the next
         15 minutes by <b>{s.mae15} MW</b> on average in testing on weeks it never saw, against {s.persist15} MW for simply repeating the last 15 minutes.
@@ -406,6 +409,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
       <AskAI />
       <LiveSection live={live} />
       <HourlyPeak />
+      <PerformanceSection />
       <WeatherSection live={live} />
       <DispatchPanel live={live} />
       <HealthSection live={live} />

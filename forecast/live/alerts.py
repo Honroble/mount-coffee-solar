@@ -33,7 +33,7 @@ SENT = {655.35, 6553.5, 65535}
 SAT_MW_PER_WM2 = 0.02063          # clear-sky mapping of horizontal irradiance to plant MW (plant-data model)
 LIMIT_MW = 16.64
 LOW_MW, RECOVER_MW, MIN_CLEAR_SKY_MW = 1.0, 2.0, 3.0   # low-forecast alert thresholds
-COOLDOWN_H = {"ramp": 3, "loss": 2, "curtailment": 6, "inverter": 6, "stale": 2, "disk": 24}
+COOLDOWN_H = {"ramp": 3, "loss": 2, "curtailment": 6, "inverter": 6, "stale": 2, "disk": 24, "portal_login": 3, "poller": 3, "forecast_stale": 3}
 INVERTERS = [f"STS{s}.INV{i:02d}" for s, n in ((1, 14), (2, 14), (3, 12)) for i in range(1, n + 1)] + [f"STS4.INV{i}" for i in range(1, 13)]
 
 
@@ -143,6 +143,35 @@ def checks(cfg, live, now):
     last_t = iv2[-1][0] if iv2 else None
     if daytime and (last_t is None or now - last_t > timedelta(minutes=30)):
         found.append(("stale", "stale", f"No plant data saved since {last_t:%H:%M} GMT." if last_t else "No plant data saved today."))
+    # monitoring the monitoring: portal sign-in, live poller, forecast job
+    try:
+        with open(os.path.join(live, "collector_log.txt"), encoding="utf-8", errors="replace") as fh:
+            tail = fh.readlines()[-40:]
+        recent = [l for l in tail if l[:16] >= (now - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M")]
+        bad = [l for l in recent if "sign-in failed" in l.lower() or "invalid login" in l.lower()]
+        if bad and len(bad) >= 2:
+            found.append(("portal_login", "portal_login", "The forecast PC cannot sign in to the Gantner portal (" + bad[-1].strip()[-160:] +
+                          "). Data collection has stopped. Fix: on the forecast PC run  python live\\check_portal_login.py --try  with the current portal password."))
+    except Exception:
+        pass
+    if daytime:
+        try:
+            w = json.load(open(os.path.join(live, "widget_now.json"), encoding="utf-8"))
+            age = now - datetime.strptime(w["time_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if age > timedelta(minutes=10):
+                found.append(("poller", "poller", f"Live 10-second readings stopped {int(age.total_seconds() // 60)} min ago (task MCSolar Live Now). "
+                              "The dashboard 'Actual MW' and STS values are stale."))
+        except Exception:
+            pass
+        try:
+            with open(os.path.join(live, "forecast_log.csv"), encoding="utf-8") as fh:
+                last = fh.readlines()[-1].split(",")[0]
+            age = now - datetime.strptime(last, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            if age > timedelta(minutes=25):
+                found.append(("forecast_stale", "forecast_stale", f"No new forecast for {int(age.total_seconds() // 60)} min (last {last[11:]} GMT; task MCSolar Forecast). "
+                              "See data\\live\\forecast_runs.txt."))
+        except Exception:
+            pass
     # output vs satellite-implied output, last 3 satellite periods (satellite arrives ~20 min late)
     sat = [s for s in satellite_recent(live) if s[0].date() == now.date()][-3:]
     if iv2 and len(sat) == 3 and daytime:
@@ -305,6 +334,12 @@ def main():
                 json.dump(state, fh)
         print("\n".join(log) if log else "no low-forecast change")
         return
+    # daily KPIs and loss breakdown for yesterday and today (kpi.py), for the dashboard and the reports
+    try:
+        import subprocess
+        subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "kpi.py"), "--config", a.config], timeout=300, capture_output=True)
+    except Exception:
+        pass
     found, widgets = checks(cfg, live, now)
     for kind, key, text in found:
         last = state.get(key)

@@ -118,3 +118,7 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .ai-dots::after { content: "…"; animation: lowpulse 1.2s infinite; }
 .ai-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .ai-msg.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; max-width: 100%; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl td { padding: 5px 8px; border-bottom: 1px solid #263241; }
+.tbl tr.strong td { font-weight: 700; }
+.sysbanner { background: rgba(248,81,73,.15); border: 1px solid var(--bad); border-left: 6px solid var(--bad); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
