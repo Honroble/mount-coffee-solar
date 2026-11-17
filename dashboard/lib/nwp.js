@@ -26,6 +26,7 @@ function dayFromFile(file) {
   const k = head.indexOf("Information.Inverter sum P");
   if (k < 0) return null;
   let e = 0, peak = 0, n = 0, date = null;
+  const hours = new Map(); // hour -> {h, peak, at, mwh}
   for (const r of rows.slice(1)) {
     if (!r[0] || r[0].startsWith("[")) continue;
     const v = Number(r[k]);
@@ -33,8 +34,15 @@ function dayFromFile(file) {
     const [dd, mm, yyyy] = r[0].split(".");
     date = `${yyyy}-${mm}-${dd}`;
     e += Math.max(v, 0) / 60; peak = Math.max(peak, v); n++;
+    const h = Number((r[1] || "").slice(0, 2));
+    if (!hours.has(h)) hours.set(h, { h, peak: -1, at: null, mwh: 0 });
+    const o = hours.get(h);
+    o.mwh += Math.max(v, 0) / 60;
+    if (v > o.peak) { o.peak = v; o.at = (r[1] || "").slice(0, 5); }
   }
-  return date ? { date, mwh: +e.toFixed(1), peakMw: +peak.toFixed(2), minutes: n, source: "logger (live)" } : null;
+  const hourly = [...hours.values()].filter((o) => o.peak > 0.05).sort((a, b) => a.h - b.h)
+    .map((o) => ({ h: o.h, peak: +o.peak.toFixed(2), at: o.at, mwh: +o.mwh.toFixed(2) }));
+  return date ? { date, mwh: +e.toFixed(1), peakMw: +peak.toFixed(2), minutes: n, hourly, source: "logger (live)" } : null;
 }
 
 export function dailyActuals() {

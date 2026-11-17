@@ -1,0 +1,9 @@
+{
+  "note": "v2 model (issued every 5 minutes), blocked cross-validation 17 Sep - 17 Nov 2026, 2-week folds not used in training",
+  "horizons": [
+    {"horizon_min": 15, "mae_mw": 1.12, "rmse_mw": 1.68, "persistence_mae_mw": 1.54, "n": 7422},
+    {"horizon_min": 30, "mae_mw": 1.76, "rmse_mw": 2.47, "persistence_mae_mw": 2.22, "n": 7253},
+    {"horizon_min": 60, "mae_mw": 2.17, "rmse_mw": 2.89, "persistence_mae_mw": 3.05, "n": 6915}
+  ],
+  "operator_view_next15": {"v1_every_15_min_mae_mw": 1.45, "v2_every_5_min_mae_mw": 1.15}
+}

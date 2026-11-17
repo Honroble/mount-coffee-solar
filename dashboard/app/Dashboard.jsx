@@ -1,5 +1,6 @@
 "use client";
 import LiveNow from "./LiveNow";
+import HourlyPeak from "./HourlyPeak";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -17,6 +18,20 @@ const ageMin = (iso, now) => (iso ? Math.round((new Date(now) - new Date(iso)) /
 const axis = { stroke: "#8b98a8", fontSize: 11 };
 const grid = <CartesianGrid stroke="#263241" strokeDasharray="3 3" />;
 const tip = { contentStyle: { background: "#171e26", border: "1px solid #263241", fontSize: 12 }, labelStyle: { color: "#e6edf3" } };
+
+function fmtDates(list) {
+  // 2026-11-14, 2026-11-15 -> "14–15 Nov"; short lists only
+  const d = list.map((x) => new Date(x + "T12:00:00Z"));
+  const parts = [];
+  for (let i = 0; i < d.length; i++) {
+    let j = i;
+    while (j + 1 < d.length && d[j + 1] - d[j] === 86400000) j++;
+    const f = (x) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+    parts.push(i === j ? f(d[i]) : `${d[i].getUTCDate()}–${f(d[j])}`);
+    i = j;
+  }
+  return parts.join(", ");
+}
 
 function Kpi({ label, value, unit, note }) {
   return (
@@ -329,8 +344,10 @@ function Frequency({ rows }) {
   );
 }
 
-export default function Dashboard({ summary: s, daily, energyAll, accuracy, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
+export default function Dashboard({ liveScore, summary: s, daily, energyAll, accuracy, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
   const live = useLive(initialLive);
+  const liveAcc = liveScore?.horizons?.find((h) => h.horizon_min === 15);
+  const liveFrom = liveScore?.from ? new Date(liveScore.from).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : "";
   return (
     <main>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -346,19 +363,25 @@ export default function Dashboard({ summary: s, daily, energyAll, accuracy, inve
           <a className="btn" href="/tv">Control-room screen →</a>
         </div>
       </div>
-      <div className="lead">Over {s.days} days of logger data the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b>. The 15-minute-ahead forecast misses by <b>{s.mae15} MW</b> on average, against {s.persist15} MW for simply repeating the last 15 minutes.</div>
-      <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are GMT (Liberia time) · history {s.first} to {s.last}</div>
+      <div className="lead">From {s.first} to {s.last} the logger recorded <b>{s.energy_mwh.toLocaleString()} MWh</b> over {s.days} days with data
+        (average normal day {s.avg_day_mwh} MWh; highest output {s.peak_mw} MW on {s.peak_day}). The forecast, issued every 5 minutes, misses the next
+        15 minutes by <b>{s.mae15} MW</b> on average in testing on weeks it never saw, against {s.persist15} MW for simply repeating the last 15 minutes.
+        {liveAcc && liveAcc.n > 0 && <> Live since {liveFrom}: <b>{liveAcc.mae_mw} MW</b> against {liveAcc.persistence_mae_mw} MW ({liveAcc.n} forecasts).</>}</div>
+      <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are GMT (Liberia time) · energy is inverter-side (logger), about 1.9 % above grid export
+        {s.missing.length > 0 && <> · no data {fmtDates(s.missing)}</>}{s.partial.length > 0 && <> · part days {fmtDates(s.partial)}</>}</div>
 
       <div className="grid kpis">
-        <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" />
-        <Kpi label="Average normal day" value={s.avg_day_mwh} unit="MWh" note="outage days excluded" />
+        <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" note={`${s.days} days, ${s.first} to ${s.last}`} />
+        <Kpi label="Average normal day" value={s.avg_day_mwh} unit="MWh" note={`${s.normal_days} full days; outage and part days excluded`} />
         <Kpi label="Best day" value={s.best_mwh} unit="MWh" note={s.best_day} />
-        <Kpi label="15-min forecast error (MAE)" value={s.mae15} unit="MW" note={`persistence ${s.persist15} MW`} />
+        <Kpi label="Best hour" value={s.best_hour ? s.best_hour.mwh.toFixed(1) : "—"} unit="MWh" note={s.best_hour ? `${s.best_hour.date} ${String(s.best_hour.h).padStart(2, "0")}:00–${String(s.best_hour.h + 1).padStart(2, "0")}:00 GMT` : ""} />
+        <Kpi label="15-min forecast error (MAE)" value={s.mae15} unit="MW" note={`repeat-last ${s.persist15} MW${liveAcc?.n ? ` · live ${liveAcc.mae_mw} MW` : ""}`} />
         <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal band 49.8–50.2 Hz" />
       </div>
 
       <LiveNow />
       <LiveSection live={live} />
+      <HourlyPeak />
       <WeatherSection live={live} />
       <DispatchPanel live={live} />
       <HealthSection live={live} />
