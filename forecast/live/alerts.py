@@ -10,7 +10,7 @@ Checks (each sent at most once per cool-down period):
   low_forecast the 15-minute forecast says output will fall below 1 MW within the next hour while the sun is up
                (clear sky >= 3 MW, plant now >= 1 MW). Sent once per drop; a "recovered" message follows when
                all three forecasts are back at 2 MW or more.
-After 19:00 UTC, once a day: the daily summary (energy, peak, forecast accuracy, alerts, plant status).
+After 19:00 GMT, once a day: the daily summary (energy, peak, forecast accuracy, alerts, plant status).
 
 Messages go to the Google receiver (action "notify"), which e-mails the addresses in its ALERT_TO setting and
 logs every alert in the sheet tab "Alerts"; the summary is also appended to the tab "DailySummary".
@@ -120,7 +120,7 @@ def checks(cfg, live, now):
     daytime = 7 <= now.hour < 18
     last_t = iv2[-1][0] if iv2 else None
     if daytime and (last_t is None or now - last_t > timedelta(minutes=30)):
-        found.append(("stale", "stale", f"No plant data saved since {last_t:%H:%M} UTC." if last_t else "No plant data saved today."))
+        found.append(("stale", "stale", f"No plant data saved since {last_t:%H:%M} GMT." if last_t else "No plant data saved today."))
     # output vs satellite-implied output, last 3 satellite periods (satellite arrives ~20 min late)
     sat = [s for s in satellite_recent(live) if s[0].date() == now.date()][-3:]
     if iv2 and len(sat) == 3 and daytime:
@@ -179,13 +179,13 @@ def low_forecast(live, now, state):
         first = low[0]
         return ("low_forecast",
                 f"LOW OUTPUT FORECAST: Mount Coffee solar is expected to fall below {LOW_MW:.0f} MW in about {first} minutes "
-                f"(forecast issued {f['t']:%H:%M} UTC: {vals}; now {f['now']:.1f} MW; clear sky would give "
+                f"(forecast issued {f['t']:%H:%M} GMT: {vals}; now {f['now']:.1f} MW; clear sky would give "
                 f"{f['cs'][first]:.1f} MW). Likely heavy cloud or rain. Be ready to cover the shortfall from other units.")
     if active and all(f["p"][m] is not None and f["p"][m] >= RECOVER_MW for m in (15, 30, 60)):
         state.pop("low_forecast", None)
         return ("low_forecast_recovered",
-                f"Recovered: the forecast issued {f['t']:%H:%M} UTC is back above {RECOVER_MW:.0f} MW ({vals}; now {f['now']:.1f} MW). "
-                f"Low-output warning from {datetime.fromisoformat(active):%H:%M} UTC is over.")
+                f"Recovered: the forecast issued {f['t']:%H:%M} GMT is back above {RECOVER_MW:.0f} MW ({vals}; now {f['now']:.1f} MW). "
+                f"Low-output warning from {datetime.fromisoformat(active):%H:%M} GMT is over.")
     return None
 
 

@@ -42,7 +42,7 @@ export default function TvScreen({ initial }) {
     <main className="tv">
       <div className="tvhead">
         <div className="tvbrand"><a className="tvback" href="/" title="Back to the dashboard">← Dashboard</a><img src="/lec-logo.png" alt="LEC" width={44} height={44} /><span><b>Mount Coffee Solar</b> · 21.17 MWp · export limit 16.64 MW</span></div>
-        <div>{clock.toISOString().slice(11, 19)} UTC · data {age === null ? "—" : `${age} min old`}</div>
+        <div>{clock.toISOString().slice(11, 19)} GMT · data {age === null ? "—" : `${age} min old`}</div>
       </div>
       <div className="tvgrid">
         <Big label={nowMw !== null ? "Now (live)" : "Now"} v={nowMw ?? f?.p_now ?? live.plant?.p_mw} sub={`${live.inverters?.filter((i) => i.online).length ?? "—"} of 52 inverters`} accent="#e6edf3" />

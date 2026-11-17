@@ -31,7 +31,7 @@ export default function HealthSection({ live }) {
               <CartesianGrid stroke="#263241" strokeDasharray="3 3" />
               <XAxis dataKey="t" tickFormatter={hhmm} stroke="#8b98a8" fontSize={11} minTickGap={40} />
               <YAxis stroke="#8b98a8" fontSize={11} width={56} unit=" MW" domain={[0, 18]} />
-              <Tooltip contentStyle={{ background: "#171e26", border: "1px solid #263241", fontSize: 12 }} labelFormatter={(t) => `${hhmm(t)} UTC`} formatter={(v, n) => [`${Number(v).toFixed(2)} MW`, n]} />
+              <Tooltip contentStyle={{ background: "#171e26", border: "1px solid #263241", fontSize: 12 }} labelFormatter={(t) => `${hhmm(t)} GMT`} formatter={(v, n) => [`${Number(v).toFixed(2)} MW`, n]} />
               <Line dataKey="expected" name="Expected" stroke="#7aa2f7" dot={false} isAnimationActive={false} />
               <Line dataKey="actual" name="Actual" stroke="#e6edf3" strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart>

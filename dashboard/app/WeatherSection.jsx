@@ -66,7 +66,7 @@ export default function WeatherSection({ live }) {
         <div>
           <h2>Today and the next 2 days (weather models)</h2>
           <div className="sub">Hourly forecast from the average of {models.length} weather models with dust (AOD) correction, and the single-model 15-minute forecast.
-            Issued {hhmm(fc.issued)} UTC ({fc.ageMin} min ago), refreshed every hour.
+            Issued {hhmm(fc.issued)} GMT ({fc.ageMin} min ago), refreshed every hour.
             {fc.calibration ? ` Calibrated hour by hour on the logger (${fc.calibration.period[0]} – ${fc.calibration.period[1]}): out-of-sample error ${fc.calibration.mae.calibrated} MW vs ${fc.calibration.mae.harris_daily_factors} MW before.` : " Using the daily-energy calibration until the hourly calibration has run."}</div>
         </div>
         <label className="sub" style={{ cursor: "pointer" }}>
@@ -112,7 +112,7 @@ export default function WeatherSection({ live }) {
           <XAxis dataKey="x" type="number" scale="time" domain={[view.from, view.to]} tickFormatter={hhmm} {...axis}
                  ticks={Array.from({ length: 15 }, (_, i) => view.from + i * 3600000)} allowDuplicatedCategory={false} />
           <YAxis {...axis} unit=" MW" width={62} domain={[0, 18]} />
-          <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} UTC`} formatter={(v, n) => [Array.isArray(v) ? `${fmt(v[0])}–${fmt(v[1])} MW` : `${fmt(v, 2)} MW`, n]} />
+          <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} GMT`} formatter={(v, n) => [Array.isArray(v) ? `${fmt(v[0])}–${fmt(v[1])} MW` : `${fmt(v, 2)} MW`, n]} />
           <ReferenceLine y={16.64} stroke="#3a4757" strokeDasharray="2 4" label={{ value: "export limit 16.64 MW", fill: "#6b7a8c", fontSize: 10, position: "insideTopRight" }} />
           {day === today && <ReferenceLine x={ms(live.now)} stroke="#3fb6c9" strokeOpacity={0.5} />}
           <Area data={view.hourly} dataKey="band" name="Likely range" stroke="none" fill={C.band} fillOpacity={0.18} isAnimationActive={false} />

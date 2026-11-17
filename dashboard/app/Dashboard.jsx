@@ -63,7 +63,7 @@ function LiveSection({ live }) {
   const stateText = {
     off: "No live data yet – the collector has not saved any readings",
     stale: `Collector last saved data ${cAge} min ago`,
-    ok: `Collector OK · last reading ${hhmm(live.collector.lastPlant)} UTC`,
+    ok: `Collector OK · last reading ${hhmm(live.collector.lastPlant)} GMT`,
   }[state];
 
   // Today's chart: actual 5-min output, and each forecast placed at the time it was forecasting for
@@ -92,7 +92,7 @@ function LiveSection({ live }) {
         </div>
         <div style={{ textAlign: "right" }}>
           <span className="status"><span className={`dot ${state}`} />{stateText}</span>
-          {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} UTC ({fAge} min ago) · model: {f.model === "v2" ? "v2 · live plant + weather + satellite" : f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}</div>}
+          {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} GMT ({fAge} min ago) · model: {f.model === "v2" ? "v2 · live plant + weather + satellite" : f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}</div>}
         </div>
       </div>
 
@@ -114,7 +114,7 @@ function LiveSection({ live }) {
             {grid}
             <XAxis dataKey="t" tickFormatter={hhmm} {...axis} minTickGap={40} />
             <YAxis {...axis} unit=" MW" width={62} domain={[0, 18]} />
-            <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} UTC`} formatter={(v) => `${fmt(v)} MW`} />
+            <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} GMT`} formatter={(v) => `${fmt(v)} MW`} />
             <Line dataKey="cs" name="Clear sky" stroke={C.cs} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
             <Line dataKey="actual" name="Actual" stroke={C.actual} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
             <Line dataKey="f15" name="Forecast 15 min" stroke={C.f15} dot={false} connectNulls isAnimationActive={false} />
@@ -136,7 +136,7 @@ function PlantNow({ live }) {
       <section className="panel">
         <div className="panel-head">
           <div><h2>Inverters right now</h2><div className="sub">Latest 1-minute reading, kW. Green = producing, red = no output.</div></div>
-          {live.plant && <div className="sub">{hhmm(live.plant.time)} UTC · {fmt(live.plant.p_mw)} MW · {fmt(live.plant.freq_hz, 2)} Hz</div>}
+          {live.plant && <div className="sub">{hhmm(live.plant.time)} GMT · {fmt(live.plant.p_mw)} MW · {fmt(live.plant.freq_hz, 2)} Hz</div>}
         </div>
         {live.plant ? stations.map((s) => (
           <div className="station" key={s}>
@@ -154,7 +154,7 @@ function PlantNow({ live }) {
       <section className="panel">
         <div className="panel-head">
           <div><h2>Weather station</h2><div className="sub">STS1 WS600, pyranometers and DustIQ, latest minute.</div></div>
-          {w && <div className="sub">{hhmm(w.time)} UTC</div>}
+          {w && <div className="sub">{hhmm(w.time)} GMT</div>}
         </div>
         {w ? (
           <div className="grid kpis" style={{ margin: 0 }}>
@@ -198,7 +198,7 @@ function Replay({ dates, initial }) {
           {grid}
           <XAxis dataKey="time" tickFormatter={hhmm} {...axis} minTickGap={40} />
           <YAxis {...axis} unit=" MW" width={62} domain={[0, 18]} />
-          <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} UTC`} formatter={(v) => `${fmt(v)} MW`} />
+          <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} GMT`} formatter={(v) => `${fmt(v)} MW`} />
           <Line dataKey="clearsky_mw" name="Clear sky" stroke={C.cs} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
           <Line dataKey="actual_mw" name="Actual" stroke={C.actual} strokeWidth={2} dot={false} isAnimationActive={false} />
           <Line dataKey="forecast15_mw" name="Forecast 15 min" stroke={C.f15} dot={false} connectNulls isAnimationActive={false} />
@@ -287,7 +287,7 @@ function InverterHealth({ rows }) {
   return (
     <section className="panel">
       <h2>Inverter health (17 Sep – 13 Nov)</h2>
-      <div className="sub">Strong-sun minutes (09:00–15:00 UTC, plant above 5 MW). Output relative to the median inverter.</div>
+      <div className="sub">Strong-sun minutes (09:00–15:00 GMT, plant above 5 MW). Output relative to the median inverter.</div>
       <div className="scroll" style={{ marginTop: 8 }}>
         <table>
           <thead><tr><th>Inverter</th><th className="num">Relative output</th><th className="num">Dropouts</th><th className="num">Alarm minutes</th><th className="num">Main alarm code</th></tr></thead>
@@ -342,12 +342,12 @@ export default function Dashboard({ summary: s, daily, energyAll, accuracy, inve
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="sub" style={{ margin: 0 }}>Updates every minute · page {(live.fetchedAt || live.now).slice(11, 19)} UTC · logger {live.collector.lastPlant ? live.collector.lastPlant.slice(11, 16) : "—"} UTC</span>
+          <span className="sub" style={{ margin: 0 }}>Updates every minute · page {(live.fetchedAt || live.now).slice(11, 19)} GMT · logger {live.collector.lastPlant ? live.collector.lastPlant.slice(11, 16) : "—"} GMT</span>
           <a className="btn" href="/tv">Control-room screen →</a>
         </div>
       </div>
       <div className="lead">Over {s.days} days of logger data the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b>. The 15-minute-ahead forecast misses by <b>{s.mae15} MW</b> on average, against {s.persist15} MW for simply repeating the last 15 minutes.</div>
-      <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are UTC (= Monrovia time) · history {s.first} to {s.last}</div>
+      <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are GMT (Liberia time) · history {s.first} to {s.last}</div>
 
       <div className="grid kpis">
         <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" />

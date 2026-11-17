@@ -62,7 +62,7 @@ export default function IrradianceSection({ live }) {
           <h2>Irradiance</h2>
           <div className="sub">All sunlight measurements and forecasts for today, in W/m². The plant's pyranometers measure horizontal sunlight (up) and light reflected from the ground (down); the panels face south at 10°, so they receive slightly more than the horizontal sensors around midday.</div>
         </div>
-        {L.time && <div className="sub">sensors {hhmm(L.time)} UTC · satellite {sat ? `${hhmm(sat.end)} UTC (${ago(sat.end, live.now)} min old)` : "—"}</div>}
+        {L.time && <div className="sub">sensors {hhmm(L.time)} GMT · satellite {sat ? `${hhmm(sat.end)} GMT (${ago(sat.end, live.now)} min old)` : "—"}</div>}
       </div>
 
       <div className="grid kpis" style={{ margin: "4px 0 10px" }}>
@@ -87,7 +87,7 @@ export default function IrradianceSection({ live }) {
           <XAxis dataKey="x" type="number" scale="time" domain={[from, to]} tickFormatter={hhmm} stroke="#8b98a8" fontSize={11}
                  ticks={Array.from({ length: 15 }, (_, i) => from + i * 3600000)} />
           <YAxis stroke="#8b98a8" fontSize={11} width={56} domain={[0, 1200]} unit="" label={{ value: "W/m²", angle: -90, position: "insideLeft", fill: "#8b98a8", fontSize: 11 }} />
-          <Tooltip contentStyle={{ background: "#171e26", border: "1px solid #263241", fontSize: 12 }} labelFormatter={(t) => `${hhmm(t)} UTC`}
+          <Tooltip contentStyle={{ background: "#171e26", border: "1px solid #263241", fontSize: 12 }} labelFormatter={(t) => `${hhmm(t)} GMT`}
                    formatter={(v, n) => [`${Math.round(v)} W/m²`, n]} />
           <ReferenceLine x={ms(live.now)} stroke="#3fb6c9" strokeOpacity={0.5} />
           {SERIES.filter((s) => !hidden[s.key]).map((s) => (

@@ -45,7 +45,7 @@ export default function LiveNow() {
       </div>
       <div className="livenow">
         <div className="lnbig"><div className="tvl">PV sum</div><div className="lnv">{f1(w?.pv_sum_mw, 2)}<span> MW</span></div>
-          <div className="sub">limit {f1(w?.power_limit_user_pct, 0)} % · {w?.time_utc ? w.time_utc.slice(11, 19) : "—"} UTC</div></div>
+          <div className="sub">limit {f1(w?.power_limit_user_pct, 0)} % · {w?.time_utc ? w.time_utc.slice(11, 19) : "—"} GMT</div></div>
         <div className="lngrid">
           {[1, 2, 3, 4].map((s) => (
             <div key={s} className="lnk"><div className="tvl">STS{s}</div><div className="lnm">{f1(mw(w?.[`sts${s}_kw`]), 2)} MW</div></div>
@@ -62,7 +62,7 @@ export default function LiveNow() {
               <XAxis dataKey="x" type="number" domain={["dataMin", "dataMax"]} scale="time" tick={{ fill: "#8b949e", fontSize: 11 }}
                      tickFormatter={(x) => new Date(x).toISOString().slice(11, 16)} />
               <YAxis domain={[0, 18]} tick={{ fill: "#8b949e", fontSize: 11 }} unit=" MW" width={56} />
-              <Tooltip labelFormatter={(x) => new Date(x).toISOString().slice(11, 19) + " UTC"} formatter={(v) => [`${Number(v).toFixed(2)} MW`, "PV sum"]}
+              <Tooltip labelFormatter={(x) => new Date(x).toISOString().slice(11, 19) + " GMT"} formatter={(v) => [`${Number(v).toFixed(2)} MW`, "PV sum"]}
                        contentStyle={{ background: "#161b22", border: "1px solid #30363d" }} />
               <Area dataKey="mw" stroke="#e6edf3" fill="rgba(230,237,243,.12)" isAnimationActive={false} dot={false} />
             </AreaChart>
