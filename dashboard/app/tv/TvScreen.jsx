@@ -1,4 +1,5 @@
 "use client";
+import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts";
 
@@ -22,7 +23,8 @@ export default function TvScreen({ initial }) {
   const best = (live.blend?.points || []).filter((p) => ms(p.t) <= to).map((p) => ({ x: ms(p.t), best: p.mw }));
   const today = live.nwp?.actualToday;
   const todayFc = live.nwp?.forecast?.days?.find((d) => d.date === day);
-  const alerts = [...(live.nwp?.forecast?.alerts || []).filter((a) => a.time.slice(0, 10) >= day && a.kind !== "reserve").map((a) => a.text),
+  const lowWarn = lowForecastWarning(live.latestForecast, live.now);
+  const alerts = [...(lowWarn ? [`LOW OUTPUT FORECAST · ${lowWarn}`] : []), ...(live.nwp?.forecast?.alerts || []).filter((a) => a.time.slice(0, 10) >= day && a.kind !== "reserve").map((a) => a.text),
     ...(live.health?.checks || []).filter((c) => c.state === "bad").map((c) => `${c.label}: ${c.text}`)];
   const age = live.collector?.lastPlant ? Math.round((Date.now() - ms(live.collector.lastPlant)) / 60000) : null;
   const Big = ({ label, v, sub, accent }) => (

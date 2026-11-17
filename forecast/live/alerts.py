@@ -7,6 +7,9 @@ Checks (each sent at most once per cool-down period):
   inverter     an inverter at ~0 kW for 30 min while the plant makes > 5 MW
   stale        the collector has saved nothing for 30 min in daytime
   disk         logger disk almost full (>= 97 % used or < 200 MB free)
+  low_forecast the 15-minute forecast says output will fall below 1 MW within the next hour while the sun is up
+               (clear sky >= 3 MW, plant now >= 1 MW). Sent once per drop; a "recovered" message follows when
+               all three forecasts are back at 2 MW or more.
 After 19:00 UTC, once a day: the daily summary (energy, peak, forecast accuracy, alerts, plant status).
 
 Messages go to the Google receiver (action "notify"), which e-mails the addresses in its ALERT_TO setting and
@@ -29,6 +32,7 @@ from nwp_forecast import load_config, daily_actuals  # noqa: E402
 SENT = {655.35, 6553.5, 65535}
 SAT_MW_PER_WM2 = 0.02063          # clear-sky mapping of horizontal irradiance to plant MW (plant-data model)
 LIMIT_MW = 16.64
+LOW_MW, RECOVER_MW, MIN_CLEAR_SKY_MW = 1.0, 2.0, 3.0   # low-forecast alert thresholds
 COOLDOWN_H = {"ramp": 3, "loss": 2, "curtailment": 6, "inverter": 6, "stale": 2, "disk": 24}
 INVERTERS = [f"STS{s}.INV{i:02d}" for s, n in ((1, 14), (2, 14), (3, 12)) for i in range(1, n + 1)] + [f"STS4.INV{i}" for i in range(1, 13)]
 
@@ -139,6 +143,70 @@ def checks(cfg, live, now):
     return found, widgets
 
 
+def latest_forecast(live, now):
+    """The newest row of forecast_log.csv if it was issued in the last 20 minutes and is usable."""
+    try:
+        with open(os.path.join(live, "forecast_log.csv"), encoding="utf-8", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+    except Exception:
+        return None
+    if not rows:
+        return None
+    r = rows[-1]
+    try:
+        t = datetime.strptime(r["issued_utc"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+    except (KeyError, ValueError):
+        return None
+    if now - t > timedelta(minutes=20) or not r.get("status", "").startswith("ok"):
+        return None
+    num = lambda k: float(r[k]) if r.get(k) not in (None, "") else None
+    return {"t": t, "now": num("p_now_mw"),
+            "p": {m: num(f"p_{m}min_mw") for m in (15, 30, 60)},
+            "cs": {m: num(f"clear_sky_{m}min_mw") for m in (15, 30, 60)}}
+
+
+def low_forecast(live, now, state):
+    """Event-style check: returns (kind, text) to send now, or None. Updates state['low_forecast']."""
+    f = latest_forecast(live, now)
+    if not f or f["now"] is None:
+        return None
+    low = [m for m in (15, 30, 60) if f["p"][m] is not None and f["p"][m] < LOW_MW
+           and (f["cs"][m] or 0) >= MIN_CLEAR_SKY_MW]
+    vals = ", ".join(f"+{m} min {f['p'][m]:.1f} MW" for m in (15, 30, 60) if f["p"][m] is not None)
+    active = state.get("low_forecast")
+    if low and not active and f["now"] >= LOW_MW:
+        state["low_forecast"] = f["t"].isoformat()
+        first = low[0]
+        return ("low_forecast",
+                f"LOW OUTPUT FORECAST: Mount Coffee solar is expected to fall below {LOW_MW:.0f} MW in about {first} minutes "
+                f"(forecast issued {f['t']:%H:%M} UTC: {vals}; now {f['now']:.1f} MW; clear sky would give "
+                f"{f['cs'][first]:.1f} MW). Likely heavy cloud or rain. Be ready to cover the shortfall from other units.")
+    if active and all(f["p"][m] is not None and f["p"][m] >= RECOVER_MW for m in (15, 30, 60)):
+        state.pop("low_forecast", None)
+        return ("low_forecast_recovered",
+                f"Recovered: the forecast issued {f['t']:%H:%M} UTC is back above {RECOVER_MW:.0f} MW ({vals}; now {f['now']:.1f} MW). "
+                f"Low-output warning from {datetime.fromisoformat(active):%H:%M} UTC is over.")
+    return None
+
+
+def run_low_forecast(cfg, live, now, state, log, dry_run):
+    before = state.get("low_forecast")
+    lf = low_forecast(live, now, state)
+    if not lf:
+        return
+    kind, text = lf
+    subject = ("Mount Coffee solar: OUTPUT FORECAST BELOW 1 MW" if kind == "low_forecast"
+               else "Mount Coffee solar: output forecast recovered")
+    res = "dry run" if dry_run else post(cfg, {"action": "notify", "kind": kind, "subject": subject, "text": text})
+    log.append(f"{now:%Y-%m-%d %H:%M} {kind}: {text} [{res[:60]}]")
+    if not dry_run and '"ok":true' not in res.replace(" ", ""):
+        # not delivered: put the state back so the next run tries again
+        if before is None:
+            state.pop("low_forecast", None)
+        else:
+            state["low_forecast"] = before
+
+
 def summary(cfg, live, now, widgets):
     day = now.strftime("%Y-%m-%d")
     act = daily_actuals(live).get(day)
@@ -192,6 +260,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
     ap.add_argument("--dry-run", action="store_true", help="print what would be sent, send nothing")
+    ap.add_argument("--low-only", action="store_true", help="only the low-forecast check (run by live_forecast.py after each forecast)")
     a = ap.parse_args()
     cfg = load_config(a.config)
     live = cfg["live_dir"]
@@ -201,8 +270,18 @@ def main():
         state = json.load(open(state_path, encoding="utf-8"))
     except Exception:
         state = {}
-    found, widgets = checks(cfg, live, now)
     log = []
+    if a.low_only:
+        run_low_forecast(cfg, live, now, state, log, a.dry_run)
+        if log:
+            with open(os.path.join(live, "alerts_log.txt"), "a", encoding="utf-8") as fh:
+                fh.write("\n".join(log) + "\n")
+        if not a.dry_run:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+        print("\n".join(log) if log else "no low-forecast change")
+        return
+    found, widgets = checks(cfg, live, now)
     for kind, key, text in found:
         last = state.get(key)
         if last and now - datetime.fromisoformat(last) < timedelta(hours=COOLDOWN_H[kind]):
@@ -211,6 +290,7 @@ def main():
         log.append(f"{now:%Y-%m-%d %H:%M} {kind}: {text} [{res[:60]}]")
         if a.dry_run or '"ok":true' in res.replace(" ", ""):
             state[key] = now.isoformat()
+    run_low_forecast(cfg, live, now, state, log, a.dry_run)
     day = now.strftime("%Y-%m-%d")
     if now.hour >= 19 and state.get("summary") != day:
         text, row = summary(cfg, live, now, widgets)

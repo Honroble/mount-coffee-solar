@@ -175,6 +175,12 @@ def main():
         logged.append({k: str(v) for k, v in row.items()})
     sent = "not sent (--no-send)"
     if not a.no_send:
+        # warn the operators straight away if output is forecast to fall below 1 MW (alerts.py decides, sends once per drop)
+        try:
+            subprocess.run([sys.executable, os.path.join(HERE, "alerts.py"), "--low-only", "--config", a.config],
+                           timeout=300, capture_output=True)
+        except Exception:
+            pass   # the regular "MCSolar Alerts" run repeats the check 3 minutes later
         sent = send_pending(cfg, live, logged)
     with open(os.path.join(live, "forecast_runs.txt"), "a", encoding="utf-8") as fh:
         fh.write(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC  {row['issued_utc']}  {row['status'][:120]}"

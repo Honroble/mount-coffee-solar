@@ -79,3 +79,5 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .brand .org { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; opacity: .7; }
 .tvbrand { display: flex; align-items: center; gap: 12px; }
 .tvhead { align-items: center; }
+.lowwarn { background: rgba(248,81,73,.18); border: 1px solid var(--bad); border-left: 6px solid var(--bad); color: var(--text); padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; animation: lowpulse 2s ease-in-out infinite; }
+@keyframes lowpulse { 50% { background: rgba(248,81,73,.32); } }

@@ -1,4 +1,5 @@
 "use client";
+import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
 import IrradianceSection from "./IrradianceSection";
@@ -54,6 +55,7 @@ function useLive(initial) {
 
 function LiveSection({ live }) {
   const f = live.latestForecast;
+  const lowWarn = lowForecastWarning(f, live.now);
   const fAge = ageMin(f?.issued, live.now);
   const cAge = ageMin(live.collector.lastPlant, live.now);
   const state = !live.liveDirExists || cAge === null ? "off" : cAge > 20 ? "stale" : "ok";
@@ -81,6 +83,7 @@ function LiveSection({ live }) {
 
   return (
     <section className="panel">
+      {lowWarn && <div className="lowwarn">⚠ LOW OUTPUT FORECAST · {lowWarn}</div>}
       <div className="panel-head">
         <div>
           <h2>Live forecast</h2>
