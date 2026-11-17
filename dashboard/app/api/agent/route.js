@@ -1,4 +1,5 @@
 import { runAgent, agentConfigured } from "@/lib/agent/run";
+import { quickAnswer, quickReport, quickContext, TOPICS } from "@/lib/agent/quick";
 import { SOURCE_URL } from "@/lib/live";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -12,7 +13,7 @@ async function proxy(req, body) {
 
 export async function GET() {
   if (!agentConfigured() && SOURCE_URL) { try { return await proxy(null); } catch { /* fall through */ } }
-  return Response.json({ configured: agentConfigured(), model: process.env.MCSOLAR_AGENT_MODEL || "claude-sonnet-5-5" });
+  return Response.json({ configured: agentConfigured(), model: process.env.MCSOLAR_AGENT_MODEL || "claude-sonnet-5-5", topics: TOPICS });
 }
 
 export async function POST(req) {
@@ -22,6 +23,15 @@ export async function POST(req) {
     try { return await proxy(req, body); } catch (e) { return Response.json({ error: `Forecast PC not reachable: ${e.message}` }, { status: 502 }); }
   }
   const mode = ["chat", "report", "investigate"].includes(body.mode) ? body.mode : "chat";
+  // Free answers (no AI): quick topics always; reports and alert facts when no API key is set
+  try {
+    if (body.topic) return Response.json({ answer: await quickAnswer(body.topic), free: true });
+    if (!agentConfigured() && mode === "report") return Response.json({ answer: await quickReport(body.period), free: true });
+    if (!agentConfigured() && mode === "investigate") return Response.json({ answer: await quickContext(), free: true });
+  } catch (e) {
+    return Response.json({ error: String(e.message || e) }, { status: 500 });
+  }
+  if (!agentConfigured()) return Response.json({ error: "Free mode: typed questions need the paid AI (setup_agent.ps1). Use the quick buttons for live status, today, forecast, inverters, alerts and health.", free: true }, { status: 503 });
   let messages = Array.isArray(body.messages) ? body.messages.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content) : [];
   if (mode === "investigate") messages = [{ role: "user", content: `Alert (${body.kind || "alert"}) at ${body.time || new Date().toISOString()}:\n${body.text || ""}` }];
   if (mode === "report") messages = [{ role: "user", content: body.period === "morning" ? "Write the morning report: yesterday's production and today's outlook." : "Write the evening report for today." }];

@@ -66,6 +66,8 @@ def ai_analysis(cfg, kind, text, now):
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=150) as r:
             j = json.loads(r.read().decode("utf-8", "replace"))
+        if j.get("answer") and j.get("free"):
+            return "\n\n" + j["answer"].strip()
         if j.get("answer"):
             return "\n\nAI analysis (Claude, reads plant data only - check before acting):\n" + j["answer"].strip()
     except Exception:

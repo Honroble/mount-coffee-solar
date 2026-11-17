@@ -127,7 +127,7 @@ const handlers = {
       latest_forecast: f, collector: live.collector,
       inverters_not_producing: (live.inverters || []).filter((i) => i.kw !== null && !i.online).map((i) => `${i.name} (${i.kw} kW)`),
       weather_station_latest: live.weather,
-      health_checks: live.health?.checks?.map((c) => ({ check: c.label, state: c.state, detail: c.detail })) ?? null,
+      health_checks: live.health?.checks?.map((c) => ({ check: c.label, state: c.state, detail: c.text })) ?? null,
       today_outlook: live.nwp?.forecast?.days?.[0] ?? null,
       weather_alerts: live.nwp?.forecast?.alerts ?? [],
     };

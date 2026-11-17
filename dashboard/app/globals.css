@@ -116,3 +116,5 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .ai-input textarea { flex: 1; resize: none; background: #0d1117; color: var(--text); border: 1px solid #263241; border-radius: 8px; padding: 8px; font: inherit; font-size: 14px; }
 .btn.primary { background: #1f6feb; color: #fff; border-color: #1f6feb; }
 .ai-dots::after { content: "…"; animation: lowpulse 1.2s infinite; }
+.ai-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-msg.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; max-width: 100%; }

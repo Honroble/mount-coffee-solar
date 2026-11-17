@@ -44,7 +44,8 @@ def main():
             fh.write(msg + "\n")
         return
     title = "morning report" if period == "morning" else "evening report"
-    text = j["answer"].strip() + "\n\n(Written by the AI assistant from the plant data - read-only. Check before acting.)"
+    text = j["answer"].strip() + ("\n\n(Automatic report from the plant data.)" if j.get("free")
+                                  else "\n\n(Written by the AI assistant from the plant data - read-only. Check before acting.)")
     if a.dry_run:
         print(text)
         return
