@@ -39,21 +39,17 @@ export default function LiveNow() {
       <div className="panel-head">
         <div>
           <h2>Live now</h2>
-          <div className="sub">Straight from the logger homepage gauges, refreshed every 10 seconds (read-only).</div>
+          <div className="sub">Plant output straight from the logger homepage gauges, refreshed every 10 seconds (read-only). Sunlight and temperatures are under Meteo Station.</div>
         </div>
         <span className="status"><span className={`dot ${state}`} />{text}</span>
       </div>
       <div className="livenow">
         <div className="lnbig"><div className="tvl">PV sum</div><div className="lnv">{f1(w?.pv_sum_mw, 2)}<span> MW</span></div>
           <div className="sub">limit {f1(w?.power_limit_user_pct, 0)} % · {w?.time_utc ? w.time_utc.slice(11, 19) : "—"} GMT</div></div>
-        <div className="lngrid">
+        <div className="lngrid lngrid2">
           {[1, 2, 3, 4].map((s) => (
             <div key={s} className="lnk"><div className="tvl">STS{s}</div><div className="lnm">{f1(mw(w?.[`sts${s}_kw`]), 2)} MW</div></div>
           ))}
-          <div className="lnk"><div className="tvl">Irradiance A</div><div className="lnm">{f1(w?.zoneA_ghi_wm2, 0)} W/m²</div></div>
-          <div className="lnk"><div className="tvl">Irradiance 4</div><div className="lnm">{f1(w?.zone4_ghi_wm2, 0)} W/m²</div></div>
-          <div className="lnk"><div className="tvl">Module A / 4</div><div className="lnm">{f1(w?.zoneA_tmod_c)} / {f1(w?.zone4_tmod_c)} °C</div></div>
-          <div className="lnk"><div className="tvl">Ambient A / 4</div><div className="lnm">{f1(w?.zoneA_tamb_c)} / {f1(w?.zone4_tamb_c)} °C</div></div>
         </div>
         <div className="lnchart">
           <ResponsiveContainer width="100%" height={150}>

@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useNow } from "./LiveNow";
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
 
 const SERIES = [
@@ -27,8 +28,32 @@ function Kpi({ label, value, note }) {
   );
 }
 
+// Live zone sensors from the logger homepage (live_poller.py, every 10 s)
+function MeteoNow({ n }) {
+  const w = n?.latest;
+  const f = (v, d = 1) => (v === null || v === undefined || Number.isNaN(v) ? "—" : Number(v).toFixed(d));
+  const fresh = w && n.ageS <= 90;
+  const tile = (label, value, unit) => (
+    <div className="lnk"><div className="tvl">{label}</div><div className="lnm">{value}<span> {unit}</span></div></div>
+  );
+  return (
+    <>
+      <div className="sub" style={{ marginBottom: 6 }}>
+        <span className={`dot ${!w ? "off" : fresh ? "ok" : "stale"}`} /> Live zone sensors · {w ? `read ${n.ageS} s ago (${w.time_utc.slice(11, 19)} GMT)` : "waiting for the live poller"}
+      </div>
+      <div className="meteonow">
+        {tile("Irradiance zone A", f(w?.zoneA_ghi_wm2, 0), "W/m²")}
+        {tile("Irradiance zone 4", f(w?.zone4_ghi_wm2, 0), "W/m²")}
+        {tile("Module temp A / 4", `${f(w?.zoneA_tmod_c)} / ${f(w?.zone4_tmod_c)}`, "°C")}
+        {tile("Ambient temp A / 4", `${f(w?.zoneA_tamb_c)} / ${f(w?.zone4_tamb_c)}`, "°C")}
+      </div>
+    </>
+  );
+}
+
 export default function IrradianceSection({ live }) {
   const ir = live.irradiance;
+  const n = useNow();
   const [hidden, setHidden] = useState({ ring: true });
   const day = live.now.slice(0, 10);
 
@@ -45,7 +70,7 @@ export default function IrradianceSection({ live }) {
   }, [ir, day]);
 
   if (!ir || ir.error) {
-    return <section className="panel"><h2>Irradiance</h2><div className="empty">No irradiance data yet.{ir?.error ? ` ${ir.error}` : ""}</div></section>;
+    return <section className="panel"><h2>Meteo Station</h2><div className="empty">No irradiance data yet.{ir?.error ? ` ${ir.error}` : ""}</div></section>;
   }
   const L = ir.sensorsLatest || {};
   const sat = ir.satellite.latest;
@@ -59,12 +84,13 @@ export default function IrradianceSection({ live }) {
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h2>Irradiance</h2>
-          <div className="sub">All sunlight measurements and forecasts for today, in W/m². The plant's pyranometers measure horizontal sunlight (up) and light reflected from the ground (down); the panels face south at 10°, so they receive slightly more than the horizontal sensors around midday.</div>
+          <h2>Meteo Station</h2>
+          <div className="sub">Weather measured at the plant: live zone sensors (every 10 s), then all sunlight measurements and forecasts for today in W/m². The plant's pyranometers measure horizontal sunlight (up) and light reflected from the ground (down); the panels face south at 10°, so they receive slightly more than the horizontal sensors around midday.</div>
         </div>
         {L.time && <div className="sub">sensors {hhmm(L.time)} GMT · satellite {sat ? `${hhmm(sat.end)} GMT (${ago(sat.end, live.now)} min old)` : "—"}</div>}
       </div>
 
+      <MeteoNow n={n} />
       <div className="grid kpis" style={{ margin: "4px 0 10px" }}>
         <Kpi label="STS1 horizontal" value={fmt(L.sts1_up)} note={`reflected ${fmt(L.sts1_down)} W/m²`} />
         <Kpi label="STS3 horizontal" value={fmt(L.sts3_up)} note={ir.sensorsMissing.includes("sts3_down") ? "reflected: collected from tomorrow" : `reflected ${fmt(L.sts3_down)} W/m²`} />

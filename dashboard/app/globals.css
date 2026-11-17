@@ -91,3 +91,7 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .lnk .tvl, .lnbig .tvl { font-size: 12px; color: var(--muted); }
 .lnm { font-size: 17px; font-weight: 600; white-space: nowrap; }
 @media (max-width: 1100px) { .livenow { grid-template-columns: 1fr; } .lngrid { grid-template-columns: repeat(2, 1fr); } }
+.lngrid2 { grid-template-columns: repeat(2, 1fr); }
+.lnk .lnm { font-size: 22px; }
+.meteonow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 12px; }
+@media (max-width: 900px) { .meteonow { grid-template-columns: repeat(2, 1fr); } }
