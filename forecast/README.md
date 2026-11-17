@@ -70,3 +70,20 @@ Get satellite data with `python fetch_satellite.py --past-days 1 --out sat_recen
 - Only ~8 weeks of data, all in the rainy-to-dry season transition; retrain monthly.
 - Add iv1 weather features (expected to help most with storm build-up and humidity changes).
 - Live feed: Gantner RAS API (needs channel mapping + API key), Modbus TCP, or SFTP upload.
+
+## v2 model: forecasts every 5 minutes (November 2026)
+
+`train5.py` trains `mcsolar_model_v2.joblib` (features in `mcsolar/features5.py`). A forecast is issued at every
+5-minute mark from rolling windows (last 15 min, last 5 min, last minute, 15-min lags to 1 h), the weather station,
+satellite irradiance over and around the plant, and per-station output. The live job fills the newest minutes from the
+10-second logger readings (`live_poller.py`), because the logger's data files reach the portal 1-5 minutes late.
+
+Blocked cross-validation, Sep 17 - Nov 17 2026, mean absolute error (MW):
+
+| | +15 min | +30 min | +60 min |
+|---|---|---|---|
+| v1 (every 15 min), same forecast times | 1.165 | 1.807 | 2.206 |
+| v2 (every 5 min), same forecast times | 1.135 | 1.776 | 2.204 |
+| What the operator sees for the next 15 min (freshest forecast at any moment) | v1 1.45 | v2 1.15 | |
+
+`live_forecast.py` uses v2 first and falls back to the 15-minute models if it fails. `retrain_monthly.py` retrains it.

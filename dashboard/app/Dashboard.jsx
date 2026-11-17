@@ -88,11 +88,11 @@ function LiveSection({ live }) {
       <div className="panel-head">
         <div>
           <h2>Live forecast</h2>
-          <div className="sub">Issued every 15 minutes by the forecast PC from the logger (read-only), the weather station and satellite data.</div>
+          <div className="sub">Issued every 5 minutes by the forecast PC, starting from the live logger readings (read-only), the weather station and satellite data.</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <span className="status"><span className={`dot ${state}`} />{stateText}</span>
-          {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} UTC ({fAge} min ago) · model: {f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}</div>}
+          {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} UTC ({fAge} min ago) · model: {f.model === "v2" ? "v2 · live plant + weather + satellite" : f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}</div>}
         </div>
       </div>
 

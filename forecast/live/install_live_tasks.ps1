@@ -11,7 +11,7 @@
 #     6) registers three Windows scheduled tasks for this user:
 #        MCSolar Collector  every minute  reads the logger and saves the values (read-only)
 #        MCSolar Live Now   every minute, polls the logger homepage every 10 s for 55 s (live "Now" values)
-#        MCSolar Forecast   every 15 minutes  forecasts 15/30/60 min ahead, logs it, sends it to the Google Sheet
+#        MCSolar Forecast   every 5 minutes   forecasts 15/30/60 min ahead, logs it, sends it to the Google Sheet
 #        MCSolar Retrain    every 4 weeks     retrains the models on all data so far
 # The PC must stay on and this user logged in. Remove everything with:  .\live\install_live_tasks.ps1 -Uninstall
 param([switch]$Uninstall, [ValidateSet("portal", "api")][string]$Source = "portal")
@@ -92,14 +92,14 @@ $now = Get-Date
 $long = New-TimeSpan -Days 3650
 $every = 1   # every minute, so the dashboard "Now" value is at most about 2 minutes old
 $start1 = $now.Date.AddHours($now.Hour).AddMinutes($now.Minute + 1)                                     # next whole minute
-$q = [math]::Ceiling(($now.Minute + 1) / 15) * 15 + 8                                                  # 8 min after each quarter hour
+$q = [math]::Ceiling(($now.Minute + 1) / 5) * 5 + 2                                                     # 2 min after each 5-minute mark
 $start15 = $now.Date.AddHours($now.Hour).AddMinutes($q)
 $startH = $now.Date.AddHours($now.Hour + 1).AddMinutes(5)                                             # 5 min past each hour
 $startA = $now.Date.AddHours($now.Hour).AddMinutes([math]::Ceiling(($now.Minute + 1) / 15) * 15 + 11) # 11 min after each quarter hour
 
 $tasks = @(
     @{ Name = $names[0]; Script = $collector;           Trigger = (New-ScheduledTaskTrigger -Once -At $start1 -RepetitionInterval (New-TimeSpan -Minutes $every) -RepetitionDuration $long) },
-    @{ Name = $names[1]; Script = "live_forecast.py";   Trigger = (New-ScheduledTaskTrigger -Once -At $start15 -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) },
+    @{ Name = $names[1]; Script = "live_forecast.py";   Trigger = (New-ScheduledTaskTrigger -Once -At $start15 -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration $long) },
     @{ Name = $names[2]; Script = "retrain_monthly.py"; Trigger = (New-ScheduledTaskTrigger -Weekly -WeeksInterval 4 -DaysOfWeek Sunday -At "22:00") },
     @{ Name = $names[3]; Script = "nwp_forecast.py";    Trigger = (New-ScheduledTaskTrigger -Once -At $startH -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration $long) },
     @{ Name = $names[4]; Script = "alerts.py";          Trigger = (New-ScheduledTaskTrigger -Once -At $startA -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) },

@@ -1,10 +1,11 @@
-"""Every 15 minutes: fetch satellite data, forecast 15/30/60 min ahead, log it and send it to the Google Sheet.
+"""Every 5 minutes: fetch satellite data, forecast 15/30/60 min ahead, log it and send it to the Google Sheet.
 
 Run by Windows Task Scheduler (see install_live_tasks.ps1):
     python live/live_forecast.py --config live/config.json
 
 Uses the best model the available data allows:
-  plant + weather + satellite  ->  plant + weather  ->  plant only
+  v2 (every 5 min, starts from the 10-second live readings)  ->  plant + weather + satellite (15-min)
+  ->  plant + weather  ->  plant only
 Each forecast is appended to <live_dir>/forecast_log.csv and POSTed to the Google Sheet web app.
 """
 import argparse
@@ -22,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # the forecast folder
 sys.path.insert(0, ROOT)
 
-from forecast import make_forecast  # noqa: E402
+from forecast import make_forecast, make_forecast_v2  # noqa: E402
 
 FIELDS = ["issued_utc", "p_now_mw", "p_15min_mw", "p_30min_mw", "p_60min_mw", "clear_sky_15min_mw",
           "clear_sky_30min_mw", "clear_sky_60min_mw", "inverters_online", "model", "satellite_used", "status"]
@@ -34,6 +35,12 @@ def load_config(path):
     root = os.path.dirname(os.path.abspath(path))
     cfg["live_dir"] = os.path.abspath(os.path.join(root, cfg.get("live_dir", "../../data/live")))
     return cfg
+
+
+def recent_now(live_dir, days=2):
+    today = datetime.now(timezone.utc).date()
+    names = [os.path.join(live_dir, f"now_{(today - timedelta(days=d)):%Y%m%d}.csv") for d in range(days)]
+    return [p for p in sorted(names) if os.path.exists(p)]
 
 
 def recent(live_dir, group, days=2):
@@ -125,7 +132,8 @@ def main():
     iv2 = cfg.get("iv2_override") or recent(live, "iv2")
     iv1 = cfg.get("iv1_override") or recent(live, "iv1")
     sat = cfg.get("sat_override") or fetch_satellite(live)
-    models = [("satellite", "mcsolar_model_satellite.joblib", True, True),
+    models = [("v2", "mcsolar_model_v2.joblib", True, True),
+              ("satellite", "mcsolar_model_satellite.joblib", True, True),
               ("weather", "mcsolar_model_weather.joblib", True, False),
               ("plant", "mcsolar_model.joblib", False, False)]
     row, errors = None, []
@@ -138,7 +146,10 @@ def main():
         if not os.path.exists(path):
             continue
         try:
-            fc = make_forecast(path, iv2, iv1 if need_iv1 else [], sat if need_sat else None, a.at)
+            if name == "v2":
+                fc = make_forecast_v2(path, iv2, iv1, sat, a.at, [] if a.at else recent_now(live))
+            else:
+                fc = make_forecast(path, iv2, iv1 if need_iv1 else [], sat if need_sat else None, a.at)
             row = {"issued_utc": fc["issued_utc"], "p_now_mw": fc["P_now_MW"],
                    "p_15min_mw": fc["P_15min_MW"], "p_30min_mw": fc["P_30min_MW"], "p_60min_mw": fc["P_60min_MW"],
                    "clear_sky_15min_mw": fc["clear_sky_15min_MW"], "clear_sky_30min_mw": fc["clear_sky_30min_MW"],

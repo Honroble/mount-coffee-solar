@@ -1,4 +1,4 @@
-"""Retrain the three forecast models on all data so far (historical exports + live files).
+"""Retrain the forecast models (v2 every-5-minute model and the three 15-minute fallbacks) on all data so far (historical exports + live files).
 
 Run monthly by Windows Task Scheduler (see install_live_tasks.ps1), or by hand:
     python live/retrain_monthly.py --config live/config.json
@@ -43,9 +43,12 @@ def main():
     jobs = [("mcsolar_model.joblib", []), ("mcsolar_model_weather.joblib", ["--iv1", *iv1])]
     if sat:
         jobs.append(("mcsolar_model_satellite.joblib", ["--iv1", *iv1, "--sat", sat]))
+    if sat:
+        jobs.append(("mcsolar_model_v2.joblib", ["--iv1", *iv1, "--sat", sat]))
     for name, extra in jobs:
         tmp = os.path.join(ROOT, name + ".new")
-        r = subprocess.run([sys.executable, "-W", "ignore", os.path.join(ROOT, "train.py"), "--iv2", *iv2, *extra,
+        script = "train5.py" if name == "mcsolar_model_v2.joblib" else "train.py"
+        r = subprocess.run([sys.executable, "-W", "ignore", os.path.join(ROOT, script), "--iv2", *iv2, *extra,
                             "--out", tmp], capture_output=True, text=True, cwd=ROOT)
         if r.returncode == 0 and os.path.exists(tmp):
             shutil.move(tmp, os.path.join(ROOT, name))

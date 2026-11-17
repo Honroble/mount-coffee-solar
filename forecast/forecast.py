@@ -14,7 +14,7 @@ from mcsolar.data import clean_plant, read_many, AC_LIMIT_MW
 from mcsolar.clearsky import solar, clear_sky_power
 from mcsolar.weather import weather_frame
 from mcsolar.satellite import read_satellite, satellite_15min
-from mcsolar import features as F, model as M
+from mcsolar import features as F, model as M, features5 as F5
 
 
 def _expand(paths):
@@ -65,6 +65,85 @@ def make_forecast(model_path, iv2, iv1=(), sat=None, at=None):
             p = float(M.to_mw(mdl.predict(x), pcs).iloc[0])
         out[f"P_{h*15}min_MW"] = round(min(p, AC_LIMIT_MW + 0.3), 2)
         out[f"clear_sky_{h*15}min_MW"] = round(float(pcs.iloc[0]), 2)
+    return out
+
+
+def _fill_from_live(pl, now_csvs, upto=None):
+    """Fill the newest minutes of plant data from live_poller.py readings (10-second logger gauges).
+
+    The logger's data files reach the portal 1-5 minutes late; the gauges are live. One-minute means of
+    the 10-second PV sum match 'Information.Inverter sum P' (checked: mean difference 0.001 MW).
+    """
+    frames = []
+    for path in now_csvs or []:
+        try:
+            n = pd.read_csv(path)
+        except Exception:
+            continue
+        if len(n):
+            n.index = pd.to_datetime(n["time_utc"], utc=True)
+            frames.append(n)
+    if not frames:
+        return pl, 0
+    n = pd.concat(frames).sort_index()
+    if upto is not None:
+        n = n[n.index <= upto]
+    g = n.resample("1min", label="right", closed="right")
+    live = pd.DataFrame({"P": g["pv_sum_mw"].mean()})
+    for i in (1, 2, 3, 4):
+        if f"sts{i}_kw" in n:
+            live[f"P_STS{i}"] = g[f"sts{i}_kw"].mean() / 1000.0
+    live = live.dropna(subset=["P"])
+    last = pl["P"].last_valid_index()
+    live = live[live.index > last] if last is not None else live
+    if live.empty:
+        return pl, 0
+    add = live.reindex(columns=pl.columns)
+    for c in pl.columns:
+        if c not in live.columns:          # counts, spread, grid flag, capacities: carry the last logger value
+            add[c] = pl[c].ffill().iloc[-1]
+    return pd.concat([pl, add]).sort_index(), len(live)
+
+
+def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=()):
+    """5-minute forecast (v2 models): issued at the latest 5-minute mark with plant data."""
+    bundle = M.load(model_path)
+    meta, models = bundle["meta"], bundle["models"]
+    raw = read_many(_expand(iv2))
+    cut = pd.Timestamp(at, tz="UTC") if at else None
+    if cut is not None:
+        raw = raw[raw.index <= cut]
+    pl = clean_plant(raw)
+    pl, n_live = _fill_from_live(pl, now_csvs, cut)
+    last = pl["P"].last_valid_index()
+    t0 = last.floor("5min")
+    fut = pd.date_range(pl.index.max() + pd.Timedelta("1min"), t0 + pd.Timedelta("75min"), freq="1min")
+    pl = pl.reindex(pl.index.append(fut))
+    pl = pl.join(solar(pl.index))
+    pl["Pcs"] = clear_sky_power(pl["ghi_cs"], meta["scale"])
+    w = weather_frame(read_many(_expand(iv1))) if (iv1 and meta.get("uses_weather")) else None
+    if w is not None and cut is not None:
+        w = w[w.index <= cut]
+    m = F5.minute_frame(pl, w)
+    s = read_satellite(sat) if (sat and meta.get("uses_satellite")) else None
+    if s is not None and cut is not None:
+        s = s[s.index <= cut - pd.Timedelta(minutes=meta.get("sat_delay", 30))]
+    f, _, valid, P15 = F5.build(m, "5min", s, meta.get("sat_delay", 30), with_targets=False)
+    if t0 not in f.index or pd.isna(f.loc[t0, "k"]) or f.loc[t0, "P_valid15"] < 0.8:
+        raise SystemExit("Not enough plant data in the last 15 minutes")
+    out = {"issued_utc": t0.strftime("%Y-%m-%d %H:%M"), "P_now_MW": round(float(P15.loc[t0]), 2),
+           "inverters_online": int(round(float(m.loc[t0, "n_inv_online"]))) if pd.notna(m.loc[t0, "n_inv_online"]) else None,
+           "live_minutes_used": n_live}
+    for h in F5.HORIZONS_MIN:
+        mdl, cols = models[h]
+        x = f.loc[[t0]].reindex(columns=cols)
+        pcs = float(f.loc[t0, f"Pcs_f{h}"])
+        if not pcs or pcs < 0.3 or pd.isna(pcs):
+            p = 0.0
+        else:
+            p = float(M.to_mw(mdl.predict(x), pd.Series([pcs])).iloc[0])
+        out[f"P_{h}min_MW"] = round(min(p, AC_LIMIT_MW + 0.3), 2)
+        out[f"clear_sky_{h}min_MW"] = round(pcs if pd.notna(pcs) else 0.0, 2)
     return out
 
 
