@@ -101,3 +101,18 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .avfrow .kpi:nth-child(1), .avfrow .kpi:nth-child(6) { border-color: #58a6ff; }
 @media (max-width: 1200px) { .avfrow { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .avfrow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ai-fab { position: fixed; right: 22px; bottom: 22px; z-index: 50; background: #1f6feb; color: #fff; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+.ai-fab:hover { background: #388bfd; }
+.ai-panel { position: fixed; right: 22px; bottom: 76px; z-index: 50; width: min(440px, calc(100vw - 32px)); height: min(620px, calc(100vh - 110px)); background: #11171f; border: 1px solid #263241; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.ai-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #263241; }
+.ai-body { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ai-msg { white-space: pre-wrap; line-height: 1.45; font-size: 14px; padding: 9px 12px; border-radius: 10px; max-width: 92%; }
+.ai-msg.user { align-self: flex-end; background: #1f6feb; color: #fff; }
+.ai-msg.assistant { align-self: flex-start; background: #1a2230; border: 1px solid #263241; }
+.ai-msg.err { border-color: var(--bad); }
+.ai-tools { margin-top: 6px; font-size: 11px; color: #8b98a8; }
+.ai-examples { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ai-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #263241; }
+.ai-input textarea { flex: 1; resize: none; background: #0d1117; color: var(--text); border: 1px solid #263241; border-radius: 8px; padding: 8px; font: inherit; font-size: 14px; }
+.btn.primary { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+.ai-dots::after { content: "…"; animation: lowpulse 1.2s infinite; }

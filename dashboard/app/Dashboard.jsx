@@ -1,6 +1,7 @@
 "use client";
 import { useNow } from "./LiveNow";
 import HourlyPeak from "./HourlyPeak";
+import AskAI from "./AskAI";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -402,6 +403,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
         <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal band 49.8–50.2 Hz" />
       </div>
 
+      <AskAI />
       <LiveSection live={live} />
       <HourlyPeak />
       <WeatherSection live={live} />

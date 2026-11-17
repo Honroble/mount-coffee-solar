@@ -53,6 +53,26 @@ def post(cfg, body):
     return f"failed: {last}"
 
 
+INVESTIGATE = {"low_forecast", "loss", "curtailment", "inverter", "ramp"}
+
+
+def ai_analysis(cfg, kind, text, now):
+    """Ask the dashboard's AI agent (Claude, read-only tools) for a likely cause. Empty string if it is not set up."""
+    if kind not in INVESTIGATE or cfg.get("agent_investigate") is False:
+        return ""
+    url = cfg.get("agent_url", "http://127.0.0.1:3000").rstrip("/") + "/api/agent"
+    body = json.dumps({"mode": "investigate", "kind": kind, "text": text, "time": now.strftime("%Y-%m-%d %H:%M GMT")}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=150) as r:
+            j = json.loads(r.read().decode("utf-8", "replace"))
+        if j.get("answer"):
+            return "\n\nAI analysis (Claude, reads plant data only - check before acting):\n" + j["answer"].strip()
+    except Exception:
+        pass
+    return ""
+
+
 def read_logger_today(live, group, now):
     path = os.path.join(live, f"{group}_live_{now:%Y%m%d}.csv")
     if not os.path.exists(path):
@@ -197,6 +217,8 @@ def run_low_forecast(cfg, live, now, state, log, dry_run):
     kind, text = lf
     subject = ("Mount Coffee solar: OUTPUT FORECAST BELOW 1 MW" if kind == "low_forecast"
                else "Mount Coffee solar: output forecast recovered")
+    if not dry_run:
+        text = text + ai_analysis(cfg, kind, text, now)
     res = "dry run" if dry_run else post(cfg, {"action": "notify", "kind": kind, "subject": subject, "text": text})
     log.append(f"{now:%Y-%m-%d %H:%M} {kind}: {text} [{res[:60]}]")
     if not dry_run and '"ok":true' not in res.replace(" ", ""):
@@ -286,6 +308,8 @@ def main():
         last = state.get(key)
         if last and now - datetime.fromisoformat(last) < timedelta(hours=COOLDOWN_H[kind]):
             continue
+        if not a.dry_run:
+            text = text + ai_analysis(cfg, kind, text, now)
         res = "dry run" if a.dry_run else post(cfg, {"action": "notify", "kind": kind, "subject": f"Mount Coffee solar: {kind}", "text": text})
         log.append(f"{now:%Y-%m-%d %H:%M} {kind}: {text} [{res[:60]}]")
         if a.dry_run or '"ok":true' in res.replace(" ", ""):

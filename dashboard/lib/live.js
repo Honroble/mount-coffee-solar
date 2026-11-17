@@ -43,7 +43,7 @@ const num = (s) => {
 const ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, "");
 
 // Logger-style file -> [{t: Date, values: {channel: number|null}}]
-function readLogger(group, day) {
+export function readLogger(group, day) {
   const text = readText(path.join(LIVE_DIR, `${group}_live_${ymd(day)}.csv`), "latin1");
   if (!text) return [];
   const rows = parseCsv(text, ";");
