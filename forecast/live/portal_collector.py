@@ -94,8 +94,14 @@ class Portal:
                 pass
 
     def save(self):
-        with open(self.jar, "wb") as fh:
+        # atomic replace: the collector and the live poller share this file
+        tmp = f"{self.jar}.{os.getpid()}.tmp"
+        with open(tmp, "wb") as fh:
             pickle.dump(self.s.cookies, fh)
+        try:
+            os.replace(tmp, self.jar)
+        except OSError:
+            os.remove(tmp)
 
     def _password(self, service, user):
         pw = keyring.get_password(service, user)

@@ -10,6 +10,7 @@
 #     5) tests one small read
 #     6) registers three Windows scheduled tasks for this user:
 #        MCSolar Collector  every minute  reads the logger and saves the values (read-only)
+#        MCSolar Live Now   every minute, polls the logger homepage every 10 s for 55 s (live "Now" values)
 #        MCSolar Forecast   every 15 minutes  forecasts 15/30/60 min ahead, logs it, sends it to the Google Sheet
 #        MCSolar Retrain    every 4 weeks     retrains the models on all data so far
 # The PC must stay on and this user logged in. Remove everything with:  .\live\install_live_tasks.ps1 -Uninstall
@@ -17,7 +18,7 @@ param([switch]$Uninstall, [ValidateSet("portal", "api")][string]$Source = "porta
 $ErrorActionPreference = "Continue"
 $live = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $live
-$names = @("MCSolar Collector", "MCSolar Forecast", "MCSolar Retrain", "MCSolar Weather Models", "MCSolar Alerts")
+$names = @("MCSolar Collector", "MCSolar Forecast", "MCSolar Retrain", "MCSolar Weather Models", "MCSolar Alerts", "MCSolar Live Now")
 
 if ($Uninstall) {
     foreach ($n in $names) { Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue }
@@ -101,7 +102,8 @@ $tasks = @(
     @{ Name = $names[1]; Script = "live_forecast.py";   Trigger = (New-ScheduledTaskTrigger -Once -At $start15 -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) },
     @{ Name = $names[2]; Script = "retrain_monthly.py"; Trigger = (New-ScheduledTaskTrigger -Weekly -WeeksInterval 4 -DaysOfWeek Sunday -At "22:00") },
     @{ Name = $names[3]; Script = "nwp_forecast.py";    Trigger = (New-ScheduledTaskTrigger -Once -At $startH -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration $long) },
-    @{ Name = $names[4]; Script = "alerts.py";          Trigger = (New-ScheduledTaskTrigger -Once -At $startA -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) }
+    @{ Name = $names[4]; Script = "alerts.py";          Trigger = (New-ScheduledTaskTrigger -Once -At $startA -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration $long) },
+    @{ Name = $names[5]; Script = "live_poller.py";     Trigger = (New-ScheduledTaskTrigger -Once -At $start1 -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration $long) }
 )
 foreach ($t in $tasks) {
     $action = New-ScheduledTaskAction -Execute $pyw -Argument ("`"" + (Join-Path $live $t.Script) + "`" --config `"" + $cfgPath + "`"") -WorkingDirectory $root

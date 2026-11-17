@@ -1,4 +1,5 @@
 "use client";
+import { useNow } from "../LiveNow";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts";
@@ -28,6 +29,8 @@ export default function TvScreen({ initial }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  const liveNow = useNow();
+  const nowMw = liveNow?.latest && liveNow.ageS <= 90 ? liveNow.latest.pv_sum_mw : null;
   const lowWarn = lowForecastWarning(live.latestForecast, live.now);
   const alerts = [...(lowWarn ? [`LOW OUTPUT FORECAST · ${lowWarn}`] : []), ...(live.nwp?.forecast?.alerts || []).filter((a) => a.time.slice(0, 10) >= day && a.kind !== "reserve").map((a) => a.text),
     ...(live.health?.checks || []).filter((c) => c.state === "bad").map((c) => `${c.label}: ${c.text}`)];
@@ -42,7 +45,7 @@ export default function TvScreen({ initial }) {
         <div>{clock.toISOString().slice(11, 19)} UTC · data {age === null ? "—" : `${age} min old`}</div>
       </div>
       <div className="tvgrid">
-        <Big label="Now" v={f?.p_now ?? live.plant?.p_mw} sub={`${live.inverters?.filter((i) => i.online).length ?? "—"} of 52 inverters`} accent="#e6edf3" />
+        <Big label={nowMw !== null ? "Now (live)" : "Now"} v={nowMw ?? f?.p_now ?? live.plant?.p_mw} sub={`${live.inverters?.filter((i) => i.online).length ?? "—"} of 52 inverters`} accent="#e6edf3" />
         <Big label="+15 min" v={f?.p15} accent="#f5a524" />
         <Big label="+30 min" v={f?.p30} accent="#f5a524" />
         <Big label="+60 min" v={f?.p60} accent="#f5a524" />

@@ -1,4 +1,5 @@
 "use client";
+import LiveNow from "./LiveNow";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -356,6 +357,7 @@ export default function Dashboard({ summary: s, daily, energyAll, accuracy, inve
         <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal band 49.8–50.2 Hz" />
       </div>
 
+      <LiveNow />
       <LiveSection live={live} />
       <WeatherSection live={live} />
       <DispatchPanel live={live} />
