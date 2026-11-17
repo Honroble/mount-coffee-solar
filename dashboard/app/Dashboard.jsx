@@ -43,7 +43,7 @@ function useLive(initial) {
     const tick = async () => {
       try {
         const r = await fetch("/api/live", { cache: "no-store" });
-        if (r.ok && !stop) setLive(await r.json());
+        if (r.ok && !stop) setLive({ ...(await r.json()), fetchedAt: new Date().toISOString() });
       } catch { /* keep the last snapshot */ }
     };
     const id = setInterval(tick, 60000);
@@ -337,7 +337,10 @@ export default function Dashboard({ summary: s, daily, energyAll, accuracy, inve
             <h1>Mount Coffee Solar – Forecast &amp; Plant Health</h1>
           </div>
         </div>
-        <a className="btn" href="/tv">Control-room screen →</a>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="sub" style={{ margin: 0 }}>Updates every minute · page {(live.fetchedAt || live.now).slice(11, 19)} UTC · logger {live.collector.lastPlant ? live.collector.lastPlant.slice(11, 16) : "—"} UTC</span>
+          <a className="btn" href="/tv">Control-room screen →</a>
+        </div>
       </div>
       <div className="lead">Over {s.days} days of logger data the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b>. The 15-minute-ahead forecast misses by <b>{s.mae15} MW</b> on average, against {s.persist15} MW for simply repeating the last 15 minutes.</div>
       <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are UTC (= Monrovia time) · history {s.first} to {s.last}</div>

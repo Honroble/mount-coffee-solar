@@ -11,7 +11,7 @@ Passwords are NOT stored in any file: they live in Windows Credential Manager
 (run  python live/set_credentials.py  once). Session cookies are kept in
 %LOCALAPPDATA%\\MCSolar so it signs in again only when a session expires.
 
-Run every 5 minutes (install_live_tasks.ps1 sets this up):
+Run every minute (install_live_tasks.ps1 sets this up):
     python live/portal_collector.py --config live/config.json
     python live/portal_collector.py --config live/config.json --test     # sign in + one small read, saves nothing
 """

@@ -9,7 +9,7 @@
 #     4) trains the plant-only and plant+weather models (fallbacks when satellite data is missing)
 #     5) tests one small read
 #     6) registers three Windows scheduled tasks for this user:
-#        MCSolar Collector  every 5 min (portal) / 1 min (api)  reads the logger and saves the values (read-only)
+#        MCSolar Collector  every minute  reads the logger and saves the values (read-only)
 #        MCSolar Forecast   every 15 minutes  forecasts 15/30/60 min ahead, logs it, sends it to the Google Sheet
 #        MCSolar Retrain    every 4 weeks     retrains the models on all data so far
 # The PC must stay on and this user logged in. Remove everything with:  .\live\install_live_tasks.ps1 -Uninstall
@@ -89,8 +89,8 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances 
 $settingsLong = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 3) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $now = Get-Date
 $long = New-TimeSpan -Days 3650
-$every = if ($Source -eq "portal") { 5 } else { 1 }
-$start1 = $now.Date.AddHours($now.Hour).AddMinutes([math]::Ceiling(($now.Minute + 1) / 5) * 5 + 1)   # 1 min after each 5-min mark
+$every = 1   # every minute, so the dashboard "Now" value is at most about 2 minutes old
+$start1 = $now.Date.AddHours($now.Hour).AddMinutes($now.Minute + 1)                                     # next whole minute
 $q = [math]::Ceiling(($now.Minute + 1) / 15) * 15 + 8                                                  # 8 min after each quarter hour
 $start15 = $now.Date.AddHours($now.Hour).AddMinutes($q)
 $startH = $now.Date.AddHours($now.Hour + 1).AddMinutes(5)                                             # 5 min past each hour

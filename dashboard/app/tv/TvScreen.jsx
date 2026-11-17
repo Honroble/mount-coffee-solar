@@ -10,7 +10,7 @@ export default function TvScreen({ initial }) {
   const [live, setLive] = useState(initial);
   const [clock, setClock] = useState(new Date());
   useEffect(() => {
-    const a = setInterval(async () => { try { const r = await fetch("/api/live", { cache: "no-store" }); if (r.ok) setLive(await r.json()); } catch { /* keep last */ } }, 30000);
+    const a = setInterval(async () => { try { const r = await fetch("/api/live", { cache: "no-store" }); if (r.ok) setLive(await r.json()); } catch { /* keep last */ } }, 60000);
     const b = setInterval(() => setClock(new Date()), 1000);
     return () => { clearInterval(a); clearInterval(b); };
   }, []);
