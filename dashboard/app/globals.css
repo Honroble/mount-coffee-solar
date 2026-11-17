@@ -98,6 +98,6 @@ code { background: #1f2a36; padding: 1px 5px; border-radius: 4px; }
 .avfrow { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
 .avfrow .kpi { padding: 10px 12px; }
 .avfrow .kpi .value { font-size: 24px; }
-.avfrow .kpi:nth-child(5), .avfrow .kpi:nth-child(6) { border-color: #58a6ff; }
+.avfrow .kpi:nth-child(1), .avfrow .kpi:nth-child(6) { border-color: #58a6ff; }
 @media (max-width: 1200px) { .avfrow { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .avfrow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

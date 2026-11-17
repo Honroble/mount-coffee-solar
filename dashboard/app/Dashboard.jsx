@@ -134,11 +134,11 @@ function LiveSection({ live }) {
       {f && f.status && f.status !== "ok" && <div className="warn-text" style={{ marginBottom: 8 }}>Forecast status: {f.status}</div>}
 
       <div className="avfrow">
+        <Kpi label="Actual MW" value={nFresh ? fmt(w.pv_sum_mw) : fmt(live.plant?.p_mw)} unit="MW"
+             note={nFresh ? `PV-Sum at ${w.time_utc.slice(11, 19)} GMT` : live.plant ? `logger ${hhmm(live.plant.time)} GMT` : ""} />
         {[1, 2, 3, 4].map((i) => (
           <Kpi key={i} label={`STS${i}`} value={nFresh && w[`sts${i}_kw`] != null ? (w[`sts${i}_kw`] / 1000).toFixed(2) : "—"} unit="MW" note="live" />
         ))}
-        <Kpi label="Actual MW" value={nFresh ? fmt(w.pv_sum_mw) : fmt(live.plant?.p_mw)} unit="MW"
-             note={nFresh ? `PV-Sum at ${w.time_utc.slice(11, 19)} GMT` : live.plant ? `logger ${hhmm(live.plant.time)} GMT` : ""} />
         <Kpi label="Current MW" value={fmt(last5 ?? f?.p_now)} unit="MW" note={last5 != null ? "average, last 5 min" : "average, last 15 min"} />
         <Kpi label="In 15 minutes" value={fmt(f?.p15)} unit="MW" note={f ? `clear sky ${fmt(f.cs15, 1)}` : ""} />
         <Kpi label="In 30 minutes" value={fmt(f?.p30)} unit="MW" note={f ? `clear sky ${fmt(f.cs30, 1)}` : ""} />
