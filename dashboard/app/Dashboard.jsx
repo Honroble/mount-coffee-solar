@@ -1,5 +1,5 @@
 "use client";
-import LiveNow from "./LiveNow";
+import { useNow } from "./LiveNow";
 import HourlyPeak from "./HourlyPeak";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
@@ -71,6 +71,15 @@ function useLive(initial) {
 
 function LiveSection({ live }) {
   const f = live.latestForecast;
+  const n = useNow();
+  const w = n?.latest;
+  const nFresh = w && n.ageS <= 90;
+  // average of the 10-second live readings over the last 5 minutes
+  const last5 = (() => {
+    if (!nFresh || !n.points?.length) return null;
+    const end = Date.parse(w.time_utc), pts = n.points.filter((p) => Date.parse(p.t) > end - 300000);
+    return pts.length ? pts.reduce((a, p) => a + p.mw, 0) / pts.length : null;
+  })();
   const lowWarn = lowForecastWarning(f, live.now);
   const fAge = ageMin(f?.issued, live.now);
   const cAge = ageMin(live.collector.lastPlant, live.now);
@@ -86,6 +95,15 @@ function LiveSection({ live }) {
     const m = new Map();
     const put = (t, k, v) => { const o = m.get(t) || { t }; o[k] = v; m.set(t, o); };
     for (const a of live.actual) put(a.t, "actual", a.mw);
+    // newest 5-minute averages from the 10-second live readings (the logger files arrive a few minutes late)
+    const have = new Set(live.actual.map((a) => a.t));
+    const b = new Map();
+    for (const p of n?.points || []) {
+      const t = new Date(Math.ceil(Date.parse(p.t) / 300000) * 300000).toISOString();
+      if (have.has(t)) continue;
+      const o = b.get(t) || [0, 0]; o[0] += p.mw; o[1] += 1; b.set(t, o);
+    }
+    for (const [t, [sum, cnt]] of b) if (cnt >= 6) put(t, "actual", +(sum / cnt).toFixed(2));
     for (const fc of live.forecasts) {
       const t0 = new Date(fc.issued).getTime();
       const at = (min) => new Date(Math.round((t0 + min * 60000) / 300000) * 300000).toISOString();
@@ -95,17 +113,18 @@ function LiveSection({ live }) {
     }
     const from = live.now.slice(0, 10) + "T05:30:00.000Z";   // today's daylight only
     return [...m.values()].filter((p) => p.t >= from).sort((a, b) => (a.t < b.t ? -1 : 1));
-  }, [live]);
+  }, [live, n]);
 
   return (
     <section className="panel">
       {lowWarn && <div className="lowwarn">⚠ LOW OUTPUT FORECAST · {lowWarn}</div>}
       <div className="panel-head">
         <div>
-          <h2>Live forecast</h2>
-          <div className="sub">Issued every 5 minutes by the forecast PC, starting from the live logger readings (read-only), the weather station and satellite data.</div>
+          <h2>Actual vs Forecast</h2>
+          <div className="sub">Actual output straight from the logger (10-second readings, read-only) and the forecast the PC issues every 5 minutes from the live readings, the weather station and satellite data.</div>
         </div>
         <div style={{ textAlign: "right" }}>
+          <span className="status"><span className={`dot ${!w ? "off" : nFresh ? "ok" : "stale"}`} />{w ? `Live · read ${n.ageS} s ago` : "Waiting for the live poller"}</span>{" "}
           <span className="status"><span className={`dot ${state}`} />{stateText}</span>
           {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} GMT ({fAge} min ago) · model: {f.model === "v2" ? "v2 · live plant + weather + satellite" : f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}</div>}
         </div>
@@ -115,11 +134,18 @@ function LiveSection({ live }) {
       {f && f.status && f.status !== "ok" && <div className="warn-text" style={{ marginBottom: 8 }}>Forecast status: {f.status}</div>}
 
       <div className="grid big">
-        <Kpi label="Output now (last 15 min)" value={fmt(f?.p_now ?? live.plant?.p_mw)} unit="MW"
-             note={f?.inverters_online != null ? `${f.inverters_online} of 52 inverters online` : live.plant ? `${live.inverters.filter((i) => i.online).length} of 52 inverters producing` : ""} />
+        <Kpi label="Output now (last 5 min)" value={fmt(last5 ?? (nFresh ? w.pv_sum_mw : null) ?? f?.p_now ?? live.plant?.p_mw)} unit="MW"
+             note={nFresh ? `PV sum ${fmt(w.pv_sum_mw)} MW at ${w.time_utc.slice(11, 19)} GMT` : f?.inverters_online != null ? `${f.inverters_online} of 52 inverters online` : ""} />
         <Kpi label="In 15 minutes" value={fmt(f?.p15)} unit="MW" note={f ? `clear sky ${fmt(f.cs15, 1)} MW` : ""} />
         <Kpi label="In 30 minutes" value={fmt(f?.p30)} unit="MW" note={f ? `clear sky ${fmt(f.cs30, 1)} MW` : ""} />
         <Kpi label="In 60 minutes" value={fmt(f?.p60)} unit="MW" note={f ? `clear sky ${fmt(f.cs60, 1)} MW` : ""} />
+      </div>
+
+      <div className="meteonow" style={{ marginTop: 10 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="lnk"><div className="tvl">STS{i} now</div>
+            <div className="lnm">{nFresh && w[`sts${i}_kw`] != null ? (w[`sts${i}_kw`] / 1000).toFixed(2) : "—"}<span> MW</span></div></div>
+        ))}
       </div>
 
       <Legend items={[["Actual (5-min average)", C.actual], ["Forecast made 15 min earlier", C.f15], ["Forecast made 60 min earlier", C.f60], ["Clear-sky maximum", C.cs, true]]} />
@@ -379,7 +405,6 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
         <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal band 49.8–50.2 Hz" />
       </div>
 
-      <LiveNow />
       <LiveSection live={live} />
       <HourlyPeak />
       <WeatherSection live={live} />
