@@ -45,6 +45,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\live\install_live_tasks.ps
   and the **Live forecast** section of the dashboard fills in.
 - The sheet's `status` column says `ok`, `stale data (...)` or `error: ...`.
 
+## Forecast verification (proving accuracy)
+
+`verify.py` runs once an hour from the **MCSolar Alerts** task (no new task needed). It:
+
+1. **Seals** each finished UTC day of `forecast_log.csv`, `nwp_daily_log.csv` and `nwp_hourly_log.csv` an hour after
+   the day ends: SHA-256 of that day's rows + the model files in use + a chain hash over all earlier days
+   (`verification_ledger.csv`, copied to the sheet tab **VerificationLedger**). Every run re-checks every sealed day;
+   any later change, deletion or late-added row shows in red on the dashboard and in the report.
+   **Never edit or trim those three logs by hand** – archive them whole if they grow too big.
+2. **Scores** every forecast against the logger: MAE, RMSE, bias, nMAE (% of 17.79 MWac), skill against simple
+   references, and for the weather models how often the actual falls inside the low–high range.
+3. **Breaks it down** by sky type, hour of day and month, lists unscored days with the reason, tags big misses.
+4. Writes `verification.json` (dashboard section "Forecast verification"), `verification_days.csv` and
+   `reports/verification_YYYY-MM.md` (download from the dashboard).
+
+After pulling this version: paste the updated `apps_script_receiver.gs` into the Apps Script and deploy a
+**New version** (it adds the `Verification` and `VerificationLedger` tabs). Run it once by hand to check:
+
+```
+python live\verify.py --config live\config.json --print
+```
+
 ## Keep in mind
 - If the portal or logger sign-in changes (new password, new page layout), the collector log shows ERROR lines.
   Run `python live\portal_collector.py --test` to see the message.

@@ -351,6 +351,13 @@ def main():
         subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "kpi.py"), "--config", a.config], timeout=300, capture_output=True)
     except Exception:
         pass
+    # forecast verification (verify.py): seal finished days, score every forecast, monthly report - once an hour
+    if now.minute < 15 or not os.path.exists(os.path.join(live, "verification.json")):
+        try:
+            import subprocess
+            subprocess.run([sys.executable, os.path.join(HERE, "verify.py"), "--config", a.config], timeout=300, capture_output=True)
+        except Exception:
+            pass
     found, widgets = checks(cfg, live, now)
     for kind, key, text in found:
         last = state.get(key)

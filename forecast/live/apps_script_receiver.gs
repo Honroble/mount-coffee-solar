@@ -5,7 +5,7 @@
  * so keep it private. Change it here and in config.json if it is ever shared by mistake.
  *
  * POST {token, row}                                    -> appends one row to "Forecasts" (skipped if that issued_utc is already the last row)
- * POST {token, action:"replace", sheet, header, rows}  -> rewrites one of the REPLACEABLE tabs (weather-model forecast, daily energy)
+ * POST {token, action:"replace", sheet, header, rows}  -> rewrites one of the REPLACEABLE tabs (weather-model forecast, daily energy, verification)
  * POST {token, action:"notify", kind, subject, text, summary_row?} -> logs the alert in tab "Alerts" (and the summary row in
  *      "DailySummary") and e-mails it to the addresses in the script property ALERT_TO (comma-separated).
  *
@@ -15,7 +15,7 @@ const TOKEN = 'CHANGE-ME-to-the-same-secret-as-config.json';
 const SHEET = 'Forecasts';
 const SPREADSHEET_ID = 'PASTE-THE-SPREADSHEET-ID';
 const COLUMNS = 12;
-const REPLACEABLE = ['WeatherHourly', 'WeatherDays', 'WeatherAlerts', 'DailyEnergy'];
+const REPLACEABLE = ['WeatherHourly', 'WeatherDays', 'WeatherAlerts', 'DailyEnergy', 'Verification', 'VerificationLedger'];
 
 function doPost(e) {
   try {
