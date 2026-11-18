@@ -37,11 +37,22 @@ COOLDOWN_H = {"ramp": 3, "loss": 2, "curtailment": 6, "inverter": 6, "stale": 2,
 INVERTERS = [f"STS{s}.INV{i:02d}" for s, n in ((1, 14), (2, 14), (3, 12)) for i in range(1, n + 1)] + [f"STS4.INV{i}" for i in range(1, 13)]
 
 
+def _json_safe(v):
+    """NaN/inf are not valid JSON (the Apps Script receiver rejects them): send them as empty cells."""
+    if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+        return None
+    if isinstance(v, dict):
+        return {k: _json_safe(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_json_safe(x) for x in v]
+    return v
+
+
 def post(cfg, body):
     url, tok = cfg.get("sheet_webhook_url"), cfg.get("sheet_token")
     if not url or not tok:
         return "no sheet configured"
-    data = json.dumps({"token": tok, **body}).encode("utf-8")
+    data = json.dumps(_json_safe({"token": tok, **body}), allow_nan=False).encode("utf-8")
     for attempt in range(3):
         try:
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "text/plain;charset=utf-8"})
