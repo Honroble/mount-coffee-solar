@@ -3,14 +3,14 @@
 J. A. Harris's factors (NEW = P_AC * max(0.3, 0.790 - 0.182*AOD)) were fitted on daily energy only. This script
 fits, for each hour of the day, how much of the models' panel-plane power the plant really delivers:
 
-    ratio = actual MW in the hour / P_AC(mean of the 6 models' irradiance and temperature)
+    ratio = actual MW in the hour / P_AC(mean of the models' irradiance and temperature)
     ratio ~ a[hour] - b * AOD                     (least squares, outage days left out)
 
 and the 10 % / 90 % spread of actual / forecast per hour, used as the likely range. It checks the result on
 data it was not fitted on (first half vs second half of the period, both ways) and only switches the live
 forecast over if the calibrated forecast is better there.
 
-Inputs: past forecasts from Open-Meteo's historical-forecast API (same 6 models), past AOD from the air-quality
+Inputs: past forecasts from Open-Meteo's historical-forecast API (same models as nwp_forecast.py), past AOD from the air-quality
 API, and the plant's 1-minute output from the logger exports in ../data and the live files in data/live.
 Output: <live_dir>/nwp_calibration.json
 """

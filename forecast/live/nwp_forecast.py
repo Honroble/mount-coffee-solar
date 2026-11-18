@@ -4,7 +4,7 @@ Method from J. A. Harris's forecast page (16 Nov 2026 handoff), applied to the p
   Tc   = Ta + G*25/800                                   (cell temperature, °C)
   P_DC = 21170 * G/1000 * (1 - 0.0034*(Tc - 25))  kW      (21.17 MWp)
   P_AC = min(0.97*P_DC, 16640)                    kW      (16.64 MW export limit)
-  NEW  = mean over 6 models of P_AC*max(0.3, 0.790 - 0.182*AOD), band x0.65 / x1.37, capped at 16.64 MW  (hourly)
+  NEW  = mean over the weather models (5 since 18 Nov 2026) of P_AC*max(0.3, 0.790 - 0.182*AOD), band x0.65 / x1.37, capped at 16.64 MW  (hourly)
   OLD  = P_AC*max(0.3, 0.744 - 0.156*AOD) from the Open-Meteo default model, band x0.63 / x1.36          (15-min)
 Factors were calibrated on May-Oct 2026 daily energy. Weather data by Open-Meteo.com (CC BY 4.0).
 
@@ -36,7 +36,9 @@ def load_config(path):
     return cfg
 
 LAT, LON, TILT, AZIMUTH = 6.52, -10.63, 10, 0
-MODELS = ["ecmwf_ifs025", "ecmwf_aifs025_single", "gfs_seamless", "icon_seamless", "meteofrance_seamless", "ukmo_seamless"]
+# GFS dropped 18 Nov 2026: worst of the six against 54 days of plant output (hourly MAE 2.21 MW, daily 17.2 MWh) and
+# removing it improved the average (1.70 -> 1.68 MW hourly). Re-add "gfs_seamless" here to restore it.
+MODELS = ["ecmwf_ifs025", "ecmwf_aifs025_single", "icon_seamless", "meteofrance_seamless", "ukmo_seamless"]
 LABELS = {"ecmwf_ifs025": "ECMWF IFS", "ecmwf_aifs025_single": "ECMWF AIFS", "gfs_seamless": "GFS",
           "icon_seamless": "ICON", "meteofrance_seamless": "Météo-France", "ukmo_seamless": "UK Met Office"}
 DC_KWP, LIMIT_KW = 21170.0, 16640.0

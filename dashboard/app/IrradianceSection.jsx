@@ -10,7 +10,7 @@ const SERIES = [
   { key: "sts3_down", label: "STS3 reflected (down)", color: "#73daca", width: 1.4, dash: "6 3" },
   { key: "sat", label: "Satellite over plant", color: "#7aa2f7", width: 1.8 },
   { key: "ring", label: "Satellite, 20 km ring average", color: "#bb9af7", width: 1.2, dash: "3 3" },
-  { key: "model", label: "Weather models (average of 6), 10° panel plane", color: "#f7768e", width: 1.6, dash: "8 4" },
+  { key: "model", label: "Weather models (average of 5), 10° panel plane", color: "#f7768e", width: 1.6, dash: "8 4" },
   { key: "clear", label: "Clear-sky maximum (horizontal)", color: "#6b7a8c", width: 1.2, dash: "2 4" },
 ];
 const fmt = (v) => (v === null || v === undefined ? "—" : Math.round(v));
@@ -95,7 +95,7 @@ export default function IrradianceSection({ live }) {
         <Kpi label="STS1 horizontal" value={fmt(L.sts1_up)} note={`reflected ${fmt(L.sts1_down)} W/m²`} />
         <Kpi label="STS3 horizontal" value={fmt(L.sts3_up)} note={ir.sensorsMissing.includes("sts3_down") ? "reflected: collected from tomorrow" : `reflected ${fmt(L.sts3_down)} W/m²`} />
         <Kpi label="Satellite over plant" value={fmt(sat?.plant)} note={`20 km ring average ${fmt(sat?.ring)} W/m²`} />
-        <Kpi label="Weather models, now" value={fmt(nowModel)} note="average of 6, this hour, 10° panel plane" />
+        <Kpi label="Weather models, now" value={fmt(nowModel)} note="average of 5, this hour, 10° panel plane" />
         <Kpi label="Clear-sky maximum, now" value={fmt(ir.clearSkyNow)} note={L.sts1_up != null && ir.clearSkyNow > 50 ? `STS1 at ${Math.round((100 * L.sts1_up) / ir.clearSkyNow)} % of clear sky` : "horizontal, no clouds"} />
       </div>
 
@@ -124,7 +124,7 @@ export default function IrradianceSection({ live }) {
       </ResponsiveContainer>
       <div className="sub" style={{ marginTop: 6 }}>
         Sensors: 5-minute averages of the logger's 1-minute readings. Satellite: EUMETSAT/DWD via Open-Meteo, 10-minute, arrives about 20 minutes late; the 20 km ring shows clouds before they reach the plant.
-        Weather models: hourly average of the 6 models on the panel plane. Clear sky: Haurwitz model at 6.505 N, 10.648 W. Not logged by the logger, so not shown: WS600 global radiation and the IEC "M_Irradiation" value.
+        Weather models: hourly average of the 5 models (GFS dropped 18 Nov) on the panel plane. Clear sky: Haurwitz model at 6.505 N, 10.648 W. Not logged by the logger, so not shown: WS600 global radiation and the IEC "M_Irradiation" value.
       </div>
     </section>
   );
