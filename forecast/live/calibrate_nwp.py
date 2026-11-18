@@ -12,6 +12,15 @@ forecast over if the calibrated forecast is better there.
 
 Inputs: past forecasts from Open-Meteo's historical-forecast API (same models as nwp_forecast.py), past AOD from the air-quality
 API, and the plant's 1-minute output from the logger exports in ../data and the live files in data/live.
+Operators' log: hours from data/operator_hourly.csv (parse_operator_log.py) before the first logger hour are added
+to the training data (station-off, curtailed and two-station hours left out), so the hour shapes cover May - Sep too.
+
+Recent level: the ratio of actual to calibrated forecast over the last 14 days (0.7 - 1.3) scales the forecast, so it
+follows the season (the models over-forecast in the rains and under-forecast in the dry months). Run daily by alerts.py.
+
+Check: weekly blocks of the logger period, each scored by a fit on all other data; the live forecast switches to the
+calibration only if it beats J. A. Harris's daily factors there. Tested 18 Nov 2026: 1.85 MW vs 1.92 MW hourly MAE.
+
 Output: <live_dir>/nwp_calibration.json
 """
 import argparse
@@ -116,6 +125,39 @@ def harris(pac, aod):
     return min(pac * max(0.3, NEW_A - NEW_B * (aod if aod is not None else 0.3)), LIMIT_KW / 1000)
 
 
+LEVEL_DAYS = 14
+
+
+def operator_rows(data_dir, before):
+    """Unflagged operator-log hours before the first logger hour: {hour_end: mw}."""
+    out = {}
+    path = os.path.join(data_dir, "operator_hourly.csv")
+    if not os.path.exists(path):
+        return out
+    with open(path, encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            try:
+                t = datetime.strptime(r["hour_end_utc"], "%Y-%m-%d %H:%M")
+                mw = float(r["mw"])
+            except (KeyError, ValueError):
+                continue
+            if t >= before or r.get("partial") == "1" or r.get("two_station") == "1" or r.get("curtailed") == "1" or mw > 17:
+                continue
+            out[t] = mw
+    return out
+
+
+def level(model, rows, day):
+    """actual / calibrated forecast over the LEVEL_DAYS before `day` (rows: (hour, pac, aod, mw, t))."""
+    lo = day - timedelta(days=LEVEL_DAYS)
+    s = p = 0.0
+    for h, pac, aod, mw, t in rows:
+        if lo <= t.date() < day:
+            s += mw
+            p += predict(model, h, pac, aod)
+    return float(np.clip(s / p, 0.7, 1.3)) if p > 20 else 1.0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -128,44 +170,60 @@ def main():
     act = hourly_actuals(paths)
     if not act:
         print("no logger data found"); sys.exit(1)
-    first, last = min(act).date(), (datetime.now(timezone.utc) - timedelta(days=1)).date()
+    op = operator_rows(data_dir, min(act))
+    first = min(list(act) + list(op)).date()
+    last = (datetime.now(timezone.utc) - timedelta(days=1)).date()
     fc = fetch_history(first.isoformat(), last.isoformat())
 
-    rows = []
-    for t, mw in act.items():
-        if t.strftime("%Y-%m-%d") in OUTAGE_DAYS or t not in fc:
-            continue
-        pac, aod = fc[t]
-        if pac < 0.5:
-            continue
-        rows.append((t.hour, pac, aod, mw, t))
-    rows.sort(key=lambda r: r[4])
-    if len(rows) < 200:
-        print(f"only {len(rows)} usable hours - keeping the current factors"); sys.exit(0)
+    def rows_of(src):
+        out = []
+        for t, mw in src.items():
+            if t.strftime("%Y-%m-%d") in OUTAGE_DAYS or t not in fc:
+                continue
+            pac, aod = fc[t]
+            if pac < 0.5:
+                continue
+            out.append((t.hour, pac, aod, mw, t))
+        return sorted(out, key=lambda r: r[4])
+    log_rows, op_rows = rows_of(act), rows_of(op)
+    if len(log_rows) < 200:
+        print(f"only {len(log_rows)} usable logger hours - keeping the current factors"); sys.exit(0)
+    every = op_rows + log_rows
 
-    # out-of-sample check: fit on one half, score on the other, both ways
-    half = len(rows) // 2
+    # out-of-sample check on the logger period: weekly blocks, each scored by a fit on everything else
+    t0 = log_rows[0][4]
+    week = lambda r: (r[4] - t0).days // 7   # noqa: E731
     err_cal, err_old = [], []
-    for train, test in ((rows[:half], rows[half:]), (rows[half:], rows[:half])):
+    for wk in sorted({week(r) for r in log_rows}):
+        test = [r for r in log_rows if week(r) == wk]
+        train = [r for r in every if not (r[4] >= test[0][4].replace(hour=0) and r[4] <= test[-1][4])]
         m = fit([r[:4] for r in train])
-        for h, pac, aod, mw, _ in test:
-            err_cal.append(abs(predict(m, h, pac, aod) - mw))
+        lv = {}
+        for h, pac, aod, mw, t in test:
+            if t.date() not in lv:
+                lv[t.date()] = level(m, every, t.date())
+            err_cal.append(abs(min(predict(m, h, pac, aod) * lv[t.date()], LIMIT_KW / 1000) - mw))
             err_old.append(abs(harris(pac, aod) - mw))
     mae_cal, mae_old = float(np.mean(err_cal)), float(np.mean(err_old))
-    a_h, b, q10, q90 = fit([r[:4] for r in rows])
+    a_h, b, q10, q90 = fit([r[:4] for r in every])
+    lvl = level((a_h, b), every, last + timedelta(days=1))
     out = {
         "fitted_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "period": [rows[0][4].strftime("%Y-%m-%d"), rows[-1][4].strftime("%Y-%m-%d")], "hours_used": len(rows),
+        "period": [every[0][4].strftime("%Y-%m-%d"), every[-1][4].strftime("%Y-%m-%d")], "hours_used": len(every),
+        "hours_logger": len(log_rows), "hours_operator_log": len(op_rows),
         "a_by_hour_end": {str(h): round(v, 4) for h, v in a_h.items()}, "b_aod": round(b, 4),
+        "level": round(lvl, 4), "level_days": LEVEL_DAYS,
         "q10_by_hour_end": {str(h): round(v, 3) for h, v in q10.items()},
         "q90_by_hour_end": {str(h): round(v, 3) for h, v in q90.items()},
         "out_of_sample_mae_mw": {"calibrated": round(mae_cal, 3), "harris_daily_factors": round(mae_old, 3)},
         "use": bool(mae_cal < mae_old),
     }
-    with open(os.path.join(live, "nwp_calibration.json"), "w", encoding="utf-8") as fh:
+    tmp = os.path.join(live, "nwp_calibration.json.tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
-    msg = (f"{len(rows)} hours, out-of-sample MAE {mae_cal:.2f} MW calibrated vs {mae_old:.2f} MW daily factors -> "
-           f"{'using calibrated' if out['use'] else 'keeping daily factors'}")
+    os.replace(tmp, os.path.join(live, "nwp_calibration.json"))
+    msg = (f"{len(log_rows)} logger + {len(op_rows)} operator-log hours, out-of-sample MAE {mae_cal:.2f} MW calibrated vs "
+           f"{mae_old:.2f} MW daily factors, recent level {lvl:.2f} -> {'using calibrated' if out['use'] else 'keeping daily factors'}")
     with open(os.path.join(live, "nwp_runs.txt"), "a", encoding="utf-8") as fh:
         fh.write(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC  calibration: {msg}\n")
     print(msg)

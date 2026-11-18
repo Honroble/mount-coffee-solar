@@ -358,6 +358,20 @@ def main():
             subprocess.run([sys.executable, os.path.join(HERE, "verify.py"), "--config", a.config], timeout=300, capture_output=True)
         except Exception:
             pass
+    # weather-model calibration (calibrate_nwp.py): refit once a day after sunset, so the 14-day level stays current
+    if now.hour >= 20:
+        try:
+            with open(os.path.join(live, "nwp_calibration.json"), encoding="utf-8") as fh:
+                fitted = json.load(fh).get("fitted_utc", "")
+        except Exception:
+            fitted = ""
+        if not fitted.startswith(now.strftime("%Y-%m-%d")):
+            try:
+                import subprocess
+                subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "calibrate_nwp.py"), "--config", a.config],
+                               timeout=600, capture_output=True)
+            except Exception:
+                pass
     found, widgets = checks(cfg, live, now)
     for kind, key, text in found:
         last = state.get(key)

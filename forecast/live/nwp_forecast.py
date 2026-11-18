@@ -131,7 +131,8 @@ def build(now, cal=None):
             # hour-by-hour calibration against the logger (calibrate_nwp.py): undo the daily factor, apply the hour's
             f_old = factor(NEW_A, NEW_B, a)
             pac = sum(per.values()) / len(per) / f_old
-            k = max(0.2, cal["a_by_hour_end"][str(t.hour)] - cal["b_aod"] * (a if a is not None else 0.3))
+            # recent level (last 14 days actual / calibrated) follows the season; 1.0 in older calibration files
+            k = max(0.2, cal["a_by_hour_end"][str(t.hour)] - cal["b_aod"] * (a if a is not None else 0.3)) * cal.get("level", 1.0)
             mean = min(pac * k, LIMIT_KW / 1000)
             lo_f, hi_f = cal["q10_by_hour_end"][str(t.hour)], cal["q90_by_hour_end"][str(t.hour)]
         hourly.append({"t": iso(t - timedelta(minutes=30)), "end": iso(t), "new": round(mean, 3), "harris": round(harris, 3),
