@@ -238,11 +238,22 @@ def save(live, fc, now):
 SENT = {655.35, 6553.5, 65535}
 
 
+def _json_safe(v):
+    """NaN/inf are not valid JSON (the Apps Script receiver rejects them): send them as empty cells."""
+    if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+        return ""
+    if isinstance(v, dict):
+        return {k: _json_safe(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_json_safe(x) for x in v]
+    return v
+
+
 def post_sheet(cfg, body):
     url = cfg.get("sheet_webhook_url")
     if not url or not cfg.get("sheet_token"):
         return "no sheet configured"
-    data = json.dumps({"token": cfg["sheet_token"], **body}).encode("utf-8")
+    data = json.dumps(_json_safe({"token": cfg["sheet_token"], **body}), allow_nan=False).encode("utf-8")
     last = None
     for attempt in range(3):
         try:
