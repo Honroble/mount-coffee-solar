@@ -10,6 +10,7 @@ import WeatherSection from "./WeatherSection";
 import IrradianceSection from "./IrradianceSection";
 import HealthSection from "./HealthSection";
 import DispatchPanel from "./DispatchPanel";
+import VerificationSection from "./VerificationSection";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, ReferenceArea,
 } from "recharts";
@@ -411,6 +412,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
       <HourlyPeak />
       <PerformanceSection />
       <WeatherSection live={live} />
+      <VerificationSection />
       <DispatchPanel live={live} />
       <HealthSection live={live} />
       <PlantNow live={live} />

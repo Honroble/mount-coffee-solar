@@ -11,6 +11,7 @@ Factors were calibrated on May-Oct 2026 daily energy. Weather data by Open-Meteo
 Writes to the live folder:
   nwp_forecast.json          latest forecast (read by the dashboard)
   nwp_daily_log.csv          every issue's daily energy per forecast day (day-ahead and same-day scoring)
+  nwp_hourly_log.csv         every issue's hourly values (append-only; scored by verify.py)
   nwp_profiles/<date>.json   last hourly profile issued on each date (hourly day-ahead scoring)
   nwp_runs.txt               one line per run
 """
@@ -210,6 +211,17 @@ def save(live, fc, now):
         for d in fc["days"]:
             if d["date"] >= now.strftime("%Y-%m-%d"):
                 w.writerow([fc["issued"], d["date"], d["newMwh"], d["lowMwh"], d["highMwh"], d["oldMwh"]])
+
+    # every issue's hourly values, append-only (verify.py scores each hour by lead time and seals the log daily)
+    hlog = os.path.join(live, "nwp_hourly_log.csv")
+    new = not os.path.exists(hlog)
+    with open(hlog, "a", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        if new:
+            w.writerow(["issued_utc", "hour_end", "forecast_mw", "low_mw", "high_mw", "calibrated"])
+        for h in fc["hourly"]:
+            if h["end"] > fc["issued"] and h["high"] > 0.05:
+                w.writerow([fc["issued"], h["end"], h["new"], h["low"], h["high"], bool(fc.get("calibration"))])
 
     prof = os.path.join(live, "nwp_profiles")
     os.makedirs(prof, exist_ok=True)

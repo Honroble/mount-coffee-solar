@@ -32,6 +32,10 @@ Current accuracy (blocked cross-validation, 17 Sep – 13 Nov 2026), mean absolu
 | 30 min | 2.26 | **1.83** |
 | 60 min | 3.09 | **2.22** |
 
+Live accuracy is proven by `forecast/live/verify.py`: every forecast is sealed in a daily hash chain and scored
+against the logger (MAE, bias, skill, range coverage, by sky type/hour/month, monthly report). See the dashboard section
+"Forecast verification" and `forecast/live/LIVE_SETUP.md`.
+
 ## What is in this repository
 
 | Folder | What it is |
