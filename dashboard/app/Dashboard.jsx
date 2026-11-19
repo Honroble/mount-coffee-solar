@@ -291,7 +291,7 @@ function DailyEnergy({ daily }) {
   return (
     <section className="panel">
       <h2>Daily energy</h2>
-      <div className="sub">MWh per day against the clear-sky maximum. Red bars are outage or missing-data days.</div>
+      <div className="sub">MWh per day at the inverters (logger) against the clear-sky maximum, updated with every day the PC saves. Red: outage or part day; grey: today so far.</div>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={daily} margin={{ top: 12, right: 12, left: 0, bottom: 0 }} barGap={-12}>
           {grid}
@@ -300,46 +300,33 @@ function DailyEnergy({ daily }) {
           <Tooltip {...tip} formatter={(v, n) => [`${fmt(v, 1)} MWh`, n]} />
           <Bar dataKey="clearsky_mwh" name="Clear-sky maximum" fill="#263241" isAnimationActive={false} barSize={12} />
           <Bar dataKey="energy_mwh" name="Produced" isAnimationActive={false} barSize={12}
-               shape={(p) => <rect x={p.x} y={p.y} width={p.width} height={p.height} fill={p.payload.status === "Normal" ? C.f15 : C.bad} rx={2} />} />
+               shape={(p) => <rect x={p.x} y={p.y} width={p.width} height={p.height} fill={p.payload.status === "Normal" ? C.f15 : p.payload.status === "Today" ? "#4b5a6c" : C.bad} rx={2} />} />
         </BarChart>
       </ResponsiveContainer>
     </section>
   );
 }
 
-function Accuracy({ rows }) {
+function InverterHealth({ data }) {
+  const rows = data?.rows || [];
+  const hasLive = !!data?.live_days;
   return (
     <section className="panel">
-      <h2>Forecast accuracy by horizon</h2>
-      <div className="sub">Mean absolute error in MW (lower is better), blocked cross-validation over two-week folds.</div>
-      <table style={{ marginTop: 8 }}>
-        <thead><tr><th>Horizon</th><th className="num">Persistence</th><th className="num">Plant only</th><th className="num">+ Weather station</th><th className="num">+ Satellite</th><th className="num">Better than persistence</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.horizon}><td>{r.horizon}</td><td className="num">{fmt(r.persistence_mae_mw)}</td><td className="num">{fmt(r.plant_only_mae_mw)}</td>
-              <td className="num">{fmt(r.with_weather_mae_mw)}</td><td className="num"><b>{fmt(r.with_satellite_mae_mw)}</b></td>
-              <td className="num">{fmt(100 * (1 - r.with_satellite_mae_mw / r.persistence_mae_mw), 0)} %</td></tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-function InverterHealth({ rows }) {
-  return (
-    <section className="panel">
-      <h2>Inverter health (17 Sep – 13 Nov)</h2>
-      <div className="sub">Strong-sun minutes (09:00–15:00 GMT, plant above 5 MW). Output relative to the median inverter.</div>
+      <h2>Inverter health</h2>
+      <div className="sub">Strong-sun minutes (09:00–15:00 GMT, plant above 5 MW). Output relative to the median inverter; below 95 % is highlighted.
+        History 17 Sep – 13 Nov (with alarm codes){hasLive ? <>; live {data.live_range} ({data.live_days} days, power only – the live files carry no alarm codes)</> : null}.</div>
       <div className="scroll" style={{ marginTop: 8 }}>
         <table>
-          <thead><tr><th>Inverter</th><th className="num">Relative output</th><th className="num">Dropouts</th><th className="num">Alarm minutes</th><th className="num">Main alarm code</th></tr></thead>
+          <thead><tr><th>Inverter</th><th className="num">Relative output (history)</th>{hasLive && <th className="num">Relative output (live)</th>}
+            <th className="num">Dropouts (history)</th>{hasLive && <th className="num">Dropouts (live)</th>}<th className="num">Alarm minutes</th><th className="num">Main alarm code</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.inverter}>
                 <td>{r.inverter}</td>
                 <td className={`num ${r.relative_output_pct < 95 ? "warn-text" : ""}`}>{fmt(r.relative_output_pct, 1)} %</td>
+                {hasLive && <td className={`num ${r.live_relative_output_pct < 95 ? "warn-text" : ""}`}>{r.live_relative_output_pct == null ? "—" : `${fmt(r.live_relative_output_pct, 1)} %`}</td>}
                 <td className={`num ${r.dropout_pct > 1 ? "bad-text" : ""}`}>{fmt(r.dropout_pct, 2)} %</td>
+                {hasLive && <td className={`num ${r.live_dropout_pct > 1 ? "bad-text" : ""}`}>{r.live_dropout_pct == null ? "—" : `${fmt(r.live_dropout_pct, 2)} %`}</td>}
                 <td className="num">{r.alarm_minutes}</td>
                 <td className="num">{r.main_alarm_code ?? "—"}</td>
               </tr>
@@ -372,7 +359,7 @@ function Frequency({ rows }) {
   );
 }
 
-export default function Dashboard({ liveScore, summary: s, daily, energyAll, accuracy, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
+export default function Dashboard({ liveScore, summary: s, daily, energyAll, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
   const live = useLive(initialLive);
   const liveAcc = liveScore?.horizons?.find((h) => h.horizon_min === 15);
   const liveFrom = liveScore?.from ? new Date(liveScore.from).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : "";
@@ -405,7 +392,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
         <Kpi label="Average normal day" value={s.avg_day_mwh} unit="MWh" note={`${s.normal_days} full days; outage and part days excluded`} />
         <Kpi label="Best day" value={s.best_mwh} unit="MWh" note={s.best_day} />
         <Kpi label="Best hour (logger)" value={s.best_hour ? s.best_hour.mwh.toFixed(1) : "—"} unit="MWh" note={s.best_hour ? `${s.best_hour.date} ${String(s.best_hour.h).padStart(2, "0")}:00–${String(s.best_hour.h + 1).padStart(2, "0")}:00 GMT` : ""} />
-        <Kpi label="15-min forecast error (MAE)" value={s.mae15} unit="MW" note={`repeat-last ${s.persist15} MW${liveAcc?.n ? ` · live ${liveAcc.mae_mw} MW` : ""}`} />
+        <Kpi label="15-min forecast error (MAE)" value={liveAcc?.n ? liveAcc.mae_mw : s.mae15} unit="MW" note={liveAcc?.n ? `live since ${liveFrom}, ${liveAcc.n} forecasts · repeat-last ${liveAcc.persistence_mae_mw} MW · in testing ${s.mae15} MW` : `in testing · repeat-last ${s.persist15} MW`} />
         <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal band 49.8–50.2 Hz" />
       </div>
 
@@ -427,8 +414,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
         <Frequency rows={frequency} />
       </div>
       <div className="grid two">
-        <Accuracy rows={accuracy} />
-        <InverterHealth rows={inverterHealth} />
+        <InverterHealth data={inverterHealth} />
       </div>
       <div className="sub" style={{ marginTop: 16 }}>
         Page refreshes live data every minute. Live data from: {live.source === "this PC" || !live.source ? `this PC (${live.liveDir})` : `forecast PC ${live.source}`}.

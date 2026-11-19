@@ -127,32 +127,10 @@ export default function WeatherSection({ live }) {
         </ComposedChart>
       </ResponsiveContainer>
 
-      <h3 style={{ margin: "16px 0 4px", fontSize: 14 }}>Scorecard: forecast vs actual daily energy</h3>
-      <div className="sub">
-        Actual = logger energy at the inverters (about 1.9 % above the J07 grid export). Day-ahead = last forecast issued before the day.
-        {s.days ? <> Average miss over {s.days} days: day-ahead {fmt(s.maeDayAheadNew)} MWh (single model {fmt(s.maeDayAheadOld)}), same-day {fmt(s.maeSameDayNew)} MWh.</> : " The scorecard fills in from tomorrow, once a full day has a day-ahead forecast."}
+      <div className="sub" style={{ marginTop: 10 }}>
+        Daily energy: {s.days ? <>average miss over {s.days} days day-ahead {fmt(s.maeDayAheadNew)} MWh (single model {fmt(s.maeDayAheadOld)}), same-day {fmt(s.maeSameDayNew)} MWh. </> : null}
+        Day by day, with ranges and causes: see <b>Forecast verification</b> below.
       </div>
-      {s.rows.length > 0 && (
-        <div className="scroll" style={{ marginTop: 8, maxHeight: 260 }}>
-          <table>
-            <thead><tr><th>Date</th><th className="num">Actual</th><th className="num">Day-ahead</th><th className="num">Range</th><th className="num">Miss</th><th className="num">Single model</th><th className="num">Same-day</th></tr></thead>
-            <tbody>
-              {s.rows.map((r) => {
-                const miss = r.dayAheadNew === null ? null : r.dayAheadNew - r.actual;
-                const out = r.dayAheadLow !== null && (r.actual < r.dayAheadLow || r.actual > r.dayAheadHigh);
-                return (
-                  <tr key={r.date}>
-                    <td>{r.date}</td><td className="num">{fmt(r.actual)}</td><td className="num">{fmt(r.dayAheadNew)}</td>
-                    <td className={`num ${out ? "warn-text" : ""}`}>{r.dayAheadLow === null ? "—" : `${fmt(r.dayAheadLow, 0)}–${fmt(r.dayAheadHigh, 0)}`}</td>
-                    <td className={`num ${miss !== null && Math.abs(miss) > 20 ? "bad-text" : ""}`}>{miss === null ? "—" : (miss > 0 ? "+" : "") + fmt(miss)}</td>
-                    <td className="num">{fmt(r.dayAheadOld)}</td><td className="num">{fmt(r.sameDayNew)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
       <div className="sub" style={{ marginTop: 8 }}>{fc.credit}</div>
     </section>
   );

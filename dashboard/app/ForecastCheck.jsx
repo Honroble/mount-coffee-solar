@@ -79,7 +79,7 @@ export default function ForecastCheck({ score }) {
       </table>
       <div className="sub" style={{ marginTop: 8 }}>
         A bias seen over a few days is often just the weather of those days: over the two months of testing the bias in every period
-        was within ±0.25 MW. Act on a bias only if it lasts for weeks.
+        was within ±0.25 MW. Act on a bias only if it lasts for weeks. The Forecast verification section below scores a slightly different set of forecasts (its own daylight and data-gap rules), so its figures can differ a little from these.
       </div>
     </section>
   );
