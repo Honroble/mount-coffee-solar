@@ -30,8 +30,11 @@ MAX_BYTES = 30 * 1024 * 1024      # compressed size limit per file (Apps Script 
 
 
 def load_config(path):
-    with open(path, encoding="utf-8") as fh:
-        return json.load(fh)
+    with open(path, encoding="utf-8-sig") as fh:
+        cfg = json.load(fh)
+    root = os.path.dirname(os.path.abspath(path))        # live_dir is relative to the config file, as in the other scripts
+    cfg["live_dir"] = os.path.abspath(os.path.join(root, cfg.get("live_dir", "../../data/live")))
+    return cfg
 
 
 def send(cfg, folder, name, raw):
