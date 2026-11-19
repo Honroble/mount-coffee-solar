@@ -349,4 +349,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # Hard stop: if the network hangs (e.g. a DNS lookup that never returns), end the run so Windows can start the next
+    # one. A run still "Running" blocks every later run (the tasks use IgnoreNew); this froze all tasks on 18 Nov.
+    import threading
+    _stop = threading.Timer(480, lambda: os._exit(3))
+    _stop.daemon = True
+    _stop.start()
     main()
