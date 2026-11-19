@@ -7,7 +7,7 @@ import { dailyActuals } from "@/lib/nwp";
 import { frequency } from "@/lib/history";
 import hourlyHistory from "@/data/history/hourly.json";
 import accV2 from "@/data/history/accuracy_v2.json";
-import operatorLog from "@/data/history/operator_daily.json";
+import reportDaily from "@/data/history/report_daily.json";
 
 const FULL_DAY_MIN = 660; // a day with fewer logged minutes than this is partial (PC off or collector stopped)
 
@@ -129,16 +129,18 @@ export function liveScore() {
   return value;
 }
 
-// Days before the first logger day, from the control-room operators' log (7 Apr - 16 Sep 2026; readings every
-// 30-60 min). Used for the whole-period totals only; peaks, best hour, frequency and forecast scores stay logger-based.
-function operatorDays(before) {
-  return operatorLog.days.filter((d) => d.date < before)
-    .map((d) => ({ date: d.date, mwh: d.energy_mwh, peakMw: null, minutes: null, status: d.status, source: "operators' log" }));
+// Days before the first logger day: grid export at J07 from the monthly reports (23 Mar - 16 Sep 2026). Export is about
+// 1.9 % below the logger's inverter-side energy. Used for the whole-period totals only; peaks, best hour, frequency and
+// forecast scores stay logger-based. (The operators' log was used here first, but its 30-60 minute readings put some
+// days up to 18 % off, e.g. 16 Jun 113.9 MWh against 96.1 MWh exported.)
+function reportDays(before) {
+  return reportDaily.filter((d) => d.date < before && d.export_mwh !== null && d.export_mwh !== undefined)
+    .map((d) => ({ date: d.date, mwh: d.export_mwh, peakMw: null, minutes: null, status: d.outage ? "Outage" : "Normal", source: "J07 report" }));
 }
 
 export function summaryAll() {
   const logger = days();
-  const op = operatorDays(logger[0].date);
+  const op = reportDays(logger[0].date);
   const all = [...op, ...logger];
   const have = new Set(all.map((d) => d.date));
   const partial = logger.filter((d) => d.date !== new Date().toISOString().slice(0, 10) && d.minutes !== null && d.minutes !== undefined && d.minutes < FULL_DAY_MIN).map((d) => d.date);

@@ -148,9 +148,11 @@ export function liveSnapshot() {
 // Addresses other PCs can use to open this dashboard (shown in the page footer).
 export function lanAddresses() {
   const out = [];
-  for (const list of Object.values(os.networkInterfaces()))
+  // skip virtual adapters (WSL / Hyper-V "vEthernet", VirtualBox host-only, VPN taps): colleagues cannot reach those
+  const VIRTUAL = /vEthernet|VirtualBox|Hyper-V|WSL|VMware|Loopback|docker|vboxnet|TAP/i;
+  for (const [name, list] of Object.entries(os.networkInterfaces()))
     for (const a of list || [])
-      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254.")) out.push(`http://${a.address}:3000`);
+      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254.") && !VIRTUAL.test(name)) out.push(`http://${a.address}:3000`);
   return out;
 }
 

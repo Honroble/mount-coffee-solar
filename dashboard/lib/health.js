@@ -116,7 +116,7 @@ export function healthSnapshot(now = new Date()) {
       } catch { return null; }
     })();
     checks.push({ id: "disk", label: "Logger disk", state: status(w.disk_used_pct < 90, w.disk_used_pct < 97),
-      text: `${w.disk_used_pct} % used, ${w.disk_free_mb} MB free${daysLeft ? `, full in about ${daysLeft.toFixed(1)} days at the current rate` : ""}. When full, the logger stops saving data files.` });
+      text: `${w.disk_used_pct} % used, ${w.disk_free_mb} MB free${daysLeft ? `, full in about ${daysLeft.toFixed(1)} days at the current rate` : ""}. The logger then deletes its oldest data files to make room (it keeps only the last few weeks): the PC's copy in data\\live and the nightly Drive backup are the long-term record.` });
     checks.push({ id: "limit", label: "Power limit", state: status(limitPct >= 100, limitPct >= 80),
       text: `PowerLimit_User ${limitPct} %, plant setpoint ${w.power_setpoint_mw} MW.` });
     checks.push({ id: "channels", label: "Logger channels", state: status(!w.channel_errors, w.channel_errors <= 10),

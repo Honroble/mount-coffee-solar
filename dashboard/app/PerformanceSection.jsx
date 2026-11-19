@@ -52,7 +52,7 @@ export default function PerformanceSection() {
       <div className="panel-head">
         <div>
           <h2>Performance &amp; losses</h2>
-          <div className="sub">Performance ratio (PR), availability and where each day&apos;s energy went. Sunlight from the STS3 pyranometer (STS1&apos;s has drifted about 20 % low since September – clean or check it). PR uses horizontal sunlight, so compare days with each other rather than with design values.</div>
+          <div className="sub">Performance ratio (PR), availability and where each day&apos;s energy went. Sunlight from the STS3 pyranometer (STS1&apos;s reads low against STS3 and the satellite – see Plant health, Pyranometers; clean or check it). PR uses horizontal sunlight, so compare days with each other rather than with design values.</div>
         </div>
         <select className="btn" value={sel?.date || ""} onChange={(e) => setDay(e.target.value)}>
           {[...days].reverse().map((d) => <option key={d.date} value={d.date}>{d.date}{d.minutes < 1300 ? " (part day)" : ""}</option>)}
