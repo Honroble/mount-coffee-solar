@@ -391,7 +391,8 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
         </div>
       </div>
       <SystemBanner />
-      <div className="lead">From {s.first} to {s.last} the logger recorded <b>{s.energy_mwh.toLocaleString()} MWh</b> over {s.days} days with data
+      <div className="lead">From {s.first} to {s.last} the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b> over {s.days} days with data
+        {s.operator_days > 0 && <> ({s.operator_days} days to {s.operator_last} from the control-room operators' log, the rest from the logger)</>}
         (average normal day {s.avg_day_mwh} MWh; highest output {s.peak_mw} MW on {s.peak_day}). The forecast, issued every 5 minutes, misses the next
         15 minutes by <b>{s.mae15} MW</b> on average in testing on weeks it never saw, against {s.persist15} MW for simply repeating the last 15 minutes.
         {liveAcc && liveAcc.n > 0 && <> Live since {liveFrom}: <b>{liveAcc.mae_mw} MW</b> against {liveAcc.persistence_mae_mw} MW ({liveAcc.n} forecasts).</>}</div>
@@ -399,10 +400,10 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
         {s.missing.length > 0 && <> · no data {fmtDates(s.missing)}</>}{s.partial.length > 0 && <> · part days {fmtDates(s.partial)}</>}</div>
 
       <div className="grid kpis">
-        <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" note={`${s.days} days, ${s.first} to ${s.last}`} />
-        <Kpi label="Average normal day" value={s.avg_day_mwh} unit="MWh" note={`${s.normal_days} full days; outage and part days excluded`} />
+        <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" note={`${s.days} days, ${s.first} to ${s.last}${s.operator_days ? ` · to ${s.operator_last} from operators' log` : ""}`} />
+        <Kpi label="Average normal day" value={s.avg_day_mwh} unit="MWh" note={`${s.normal_days} full days; outage, part and STS1–2-only days excluded`} />
         <Kpi label="Best day" value={s.best_mwh} unit="MWh" note={s.best_day} />
-        <Kpi label="Best hour" value={s.best_hour ? s.best_hour.mwh.toFixed(1) : "—"} unit="MWh" note={s.best_hour ? `${s.best_hour.date} ${String(s.best_hour.h).padStart(2, "0")}:00–${String(s.best_hour.h + 1).padStart(2, "0")}:00 GMT` : ""} />
+        <Kpi label="Best hour (logger)" value={s.best_hour ? s.best_hour.mwh.toFixed(1) : "—"} unit="MWh" note={s.best_hour ? `${s.best_hour.date} ${String(s.best_hour.h).padStart(2, "0")}:00–${String(s.best_hour.h + 1).padStart(2, "0")}:00 GMT` : ""} />
         <Kpi label="15-min forecast error (MAE)" value={s.mae15} unit="MW" note={`repeat-last ${s.persist15} MW${liveAcc?.n ? ` · live ${liveAcc.mae_mw} MW` : ""}`} />
         <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal band 49.8–50.2 Hz" />
       </div>

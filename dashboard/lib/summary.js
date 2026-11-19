@@ -7,6 +7,7 @@ import { dailyActuals } from "@/lib/nwp";
 import { frequency } from "@/lib/history";
 import hourlyHistory from "@/data/history/hourly.json";
 import accV2 from "@/data/history/accuracy_v2.json";
+import operatorLog from "@/data/history/operator_daily.json";
 
 const FULL_DAY_MIN = 660; // a day with fewer logged minutes than this is partial (PC off or collector stopped)
 
@@ -109,15 +110,24 @@ export function liveScore() {
   return value;
 }
 
+// Days before the first logger day, from the control-room operators' log (7 Apr - 16 Sep 2026; readings every
+// 30-60 min). Used for the whole-period totals only; peaks, best hour, frequency and forecast scores stay logger-based.
+function operatorDays(before) {
+  return operatorLog.days.filter((d) => d.date < before)
+    .map((d) => ({ date: d.date, mwh: d.energy_mwh, peakMw: null, minutes: null, status: d.status, source: "operators' log" }));
+}
+
 export function summaryAll() {
-  const all = days();
+  const logger = days();
+  const op = operatorDays(logger[0].date);
+  const all = [...op, ...logger];
   const have = new Set(all.map((d) => d.date));
-  const partial = all.filter((d) => d.date !== new Date().toISOString().slice(0, 10) && d.minutes !== null && d.minutes !== undefined && d.minutes < FULL_DAY_MIN).map((d) => d.date);
+  const partial = logger.filter((d) => d.date !== new Date().toISOString().slice(0, 10) && d.minutes !== null && d.minutes !== undefined && d.minutes < FULL_DAY_MIN).map((d) => d.date);
   const today = new Date().toISOString().slice(0, 10);
   const isNormal = (d) => d.date !== today && (d.status ? d.status === "Normal" : (d.minutes ?? 0) >= FULL_DAY_MIN);
   const normal = all.filter(isNormal);
   const best = all.reduce((a, b) => (b.mwh > a.mwh ? b : a));
-  const peakDay = all.reduce((a, b) => ((b.peakMw ?? 0) > (a.peakMw ?? 0) ? b : a));
+  const peakDay = logger.reduce((a, b) => ((b.peakMw ?? 0) > (a.peakMw ?? 0) ? b : a));
   const byDate = hourlyByDate();
   let bestHour = null;
   for (const [date, rows] of Object.entries(byDate)) for (const r of rows) if (!bestHour || r.mwh > bestHour.mwh) bestHour = { ...r, date };
@@ -125,6 +135,8 @@ export function summaryAll() {
   const v15 = accV2.horizons.find((h) => h.horizon_min === 15);
   return {
     days: all.length, first: all[0].date, last: all.at(-1).date,
+    logger_first: logger[0].date, logger_days: logger.length, operator_days: op.length,
+    operator_last: op.length ? op.at(-1).date : null,
     missing: missingDates(all[0].date, all.at(-1).date, have), partial,
     energy_mwh: Math.round(all.reduce((s, d) => s + (d.mwh || 0), 0)),
     avg_day_mwh: +(normal.reduce((s, d) => s + d.mwh, 0) / normal.length).toFixed(1), normal_days: normal.length,

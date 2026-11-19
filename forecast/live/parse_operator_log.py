@@ -34,7 +34,8 @@ def num(v):
 
 def minutes(v):
     if isinstance(v, dt.datetime):
-        return v.hour * 60 + v.minute
+        # a time-only cell comes back as 1899-12-30/31 HH:MM; a real date (the tab's date in column A) is not a time
+        return v.hour * 60 + v.minute if v.year < 1901 else None
     if isinstance(v, dt.time):
         return v.hour * 60 + v.minute
     if isinstance(v, (int, float)) and 0 <= v < 1:          # Excel time fraction
