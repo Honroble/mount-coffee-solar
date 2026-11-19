@@ -95,26 +95,32 @@ function LiveSection({ live }) {
     ok: `Collector OK · last reading ${hhmm(live.collector.lastPlant)} GMT`,
   }[state];
 
-  // Today's chart: actual 5-min output, and each forecast placed at the time it was forecasting for
+  // Today's chart. Every line is placed at the CENTRE of the period it averages, on one 5-minute grid offset by 2.5 min:
+  //  actual = 5-minute average (logger bucket k..k+5 -> k+2.5); forecast "15 min" = average over issue..issue+15 -> +7.5;
+  //  forecast "60 min" = average over issue+45..issue+60 -> +52.5. (Until 19 Nov the forecasts were drawn at the END of
+  //  their 15-minute window against actuals labelled at the START of theirs, which made the forecast look ~10 min late,
+  //  and the newest actuals from the 10-second readings were labelled at the end, 5 min off from the logger's.)
   const series = useMemo(() => {
+    const HALF = 150000, STEP = 300000;
+    const slot = (ms) => new Date(Math.round((ms - HALF) / STEP) * STEP + HALF).toISOString();
     const m = new Map();
     const put = (t, k, v) => { const o = m.get(t) || { t }; o[k] = v; m.set(t, o); };
-    for (const a of live.actual) put(a.t, "actual", a.mw);
+    for (const a of live.actual) put(slot(Date.parse(a.t) + HALF), "actual", a.mw);   // a.t = start of the 5-min bucket
     // newest 5-minute averages from the 10-second live readings (the logger files arrive a few minutes late)
-    const have = new Set(live.actual.map((a) => a.t));
+    const have = new Set(live.actual.map((a) => slot(Date.parse(a.t) + HALF)));
     const b = new Map();
     for (const p of n?.points || []) {
-      const t = new Date(Math.ceil(Date.parse(p.t) / 300000) * 300000).toISOString();
+      const start = Math.floor(Date.parse(p.t) / STEP) * STEP;
+      const t = slot(start + HALF);
       if (have.has(t)) continue;
       const o = b.get(t) || [0, 0]; o[0] += p.mw; o[1] += 1; b.set(t, o);
     }
     for (const [t, [sum, cnt]] of b) if (cnt >= 6) put(t, "actual", +(sum / cnt).toFixed(2));
     for (const fc of live.forecasts) {
       const t0 = new Date(fc.issued).getTime();
-      const at = (min) => new Date(Math.round((t0 + min * 60000) / 300000) * 300000).toISOString();
-      if (fc.p15 !== null) put(at(15), "f15", fc.p15);
-      if (fc.p60 !== null) put(at(60), "f60", fc.p60);
-      if (fc.cs15 !== null) put(at(15), "cs", fc.cs15);
+      if (fc.p15 !== null) put(slot(t0 + 7.5 * 60000), "f15", fc.p15);
+      if (fc.p60 !== null) put(slot(t0 + 52.5 * 60000), "f60", fc.p60);
+      if (fc.cs15 !== null) put(slot(t0 + 7.5 * 60000), "cs", fc.cs15);
     }
     const from = live.now.slice(0, 10) + "T05:30:00.000Z";   // today's daylight only
     return [...m.values()].filter((p) => p.t >= from).sort((a, b) => (a.t < b.t ? -1 : 1));
@@ -150,14 +156,14 @@ function LiveSection({ live }) {
         <Kpi label="In 60 minutes" value={fmt(f?.p60)} unit="MW" note={f ? `clear sky ${fmt(f.cs60, 1)}` : ""} />
       </div>
 
-      <Legend items={[["Actual (5-min average)", C.actual], ["Forecast made 15 min earlier", C.f15], ["Forecast made 60 min earlier", C.f60], ["Clear-sky maximum", C.cs, true]]} />
+      <Legend items={[["Actual (5-min average)", C.actual], ["Forecast for the next 15 min (drawn at the middle of its 15 min)", C.f15], ["Forecast 45–60 min ahead", C.f60], ["Clear-sky maximum", C.cs, true]]} />
       {series.length ? (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             {grid}
-            <XAxis dataKey="t" tickFormatter={hhmm} {...axis} minTickGap={40} />
+            <XAxis dataKey="t" tickFormatter={(t) => hhmm(new Date(Date.parse(t) - 150000).toISOString())} {...axis} minTickGap={40} />
             <YAxis {...axis} unit=" MW" width={62} domain={[0, 18]} />
-            <Tooltip {...tip} labelFormatter={(t) => `${hhmm(t)} GMT`} formatter={(v) => `${fmt(v)} MW`} />
+            <Tooltip {...tip} labelFormatter={(t) => `${hhmm(new Date(Date.parse(t) - 150000).toISOString())}–${hhmm(new Date(Date.parse(t) + 150000).toISOString())} GMT`} formatter={(v) => `${fmt(v)} MW`} />
             <Line dataKey="cs" name="Clear sky" stroke={C.cs} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
             <Line dataKey="actual" name="Actual" stroke={C.actual} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
             <Line dataKey="f15" name="Forecast 15 min" stroke={C.f15} dot={false} connectNulls isAnimationActive={false} />
