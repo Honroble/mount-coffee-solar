@@ -5,6 +5,7 @@ import AskAI from "./AskAI";
 import SystemBanner from "./SystemBanner";
 import PerformanceSection from "./PerformanceSection";
 import ForecastCheck from "./ForecastCheck";
+import RampBanner from "./RampBanner";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -385,6 +386,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, inv
         </div>
       </div>
       <SystemBanner />
+      <RampBanner />
       <div className="lead">From {s.first} to {s.last} the plant produced <b>{s.energy_mwh.toLocaleString()} MWh</b> over {s.days} days with data
         {s.operator_days > 0 && <> ({s.operator_days} days to {s.operator_last} from the J07 grid-export reports, the rest from the logger)</>}
         (average normal day {s.avg_day_mwh} MWh; highest output {s.peak_mw} MW on {s.peak_day}). The forecast, issued every 5 minutes, misses the next

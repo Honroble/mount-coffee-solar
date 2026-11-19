@@ -78,6 +78,13 @@ def main():
         if left < a.every:
             break
         time.sleep(max(0, a.every - (time.monotonic() - t0)))
+    # fast-drop alarms and sky-state reserve for dispatch (ramp_watch.py), on the readings just saved
+    try:
+        import ramp_watch
+        ramp_watch.run(cfg, config_path=a.config)
+    except Exception as e:
+        with open(os.path.join(live, "collector_log.txt"), "a", encoding="utf-8") as fh:
+            fh.write(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC  ramp watch: {e}\n"[:300])
 
 
 if __name__ == "__main__":

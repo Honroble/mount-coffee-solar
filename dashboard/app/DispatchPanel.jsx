@@ -23,6 +23,16 @@ export default function DispatchPanel({ live }) {
   const upd = (k, v) => setS((o) => ({ ...o, [k]: v }));
   const updUnit = (k, i, f, v) => setS((o) => ({ ...o, [k]: o[k].map((u, j) => (j === i ? { ...u, [f]: v } : u)) }));
 
+  // sky-state reserve from ramp_watch.py: how far solar could fall in the next 15 min (95 % of past drops were smaller)
+  const [ramp, setRamp] = useState(null);
+  useEffect(() => {
+    let stop = false;
+    const load = () => fetch("/api/ramp", { cache: "no-store" }).then((r) => r.json()).then((j) => !stop && setRamp(j)).catch(() => {});
+    load();
+    const id = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(id); };
+  }, []);
+
   const solar = useMemo(() => {
     const now = live.latestForecast?.p_now ?? live.plant?.p_mw ?? 0;
     const pts = live.blend?.points || [];
@@ -31,15 +41,18 @@ export default function DispatchPanel({ live }) {
     const hourly = live.nwp?.forecast?.hourly || [];
     const lowNext = hourly.filter((h) => { const t = Date.parse(h.t); return t >= Date.now() - 1800000 && t <= Date.now() + 3600000; }).map((h) => h.low);
     const minNext = Math.min(now, ...(next1h.length ? next1h : [now]), ...(lowNext.length ? lowNext : [now]));
-    return { now, minNext: Math.max(0, minNext), drop: Math.max(0, now - Math.max(0, minNext)) };
-  }, [live]);
+    const fcDrop = Math.max(0, now - Math.max(0, minNext));
+    const sky = ramp && !ramp.stale && ramp.reserve_mw != null ? { name: ramp.sky, pct: ramp.reserve_pct, mw: ramp.reserve_mw } : null;
+    const drop = Math.max(fcDrop, sky?.mw ?? 0);
+    return { now, minNext: Math.max(0, Math.min(minNext, now - drop)), drop, fcDrop, sky };
+  }, [live, ramp]);
 
   const r = useMemo(() => {
     const units = [...s.hydro.map((u, i) => ({ ...u, name: `Hydro ${i + 1}` })), ...s.thermal].filter((u) => u.on);
     const sync = units.reduce((a, u) => a + u.mw, 0);
     const reserve = units.reduce((a, u) => a + Math.max(0, u.cap - u.mw), 0);
     const largestUnit = units.reduce((a, u) => (u.mw > a.mw ? u : a), { mw: 0, name: "—" });
-    const losses = [{ what: largestUnit.name, mw: largestUnit.mw }, { what: "Regional import (tie-line trip)", mw: s.ppa }, { what: "Solar drop within the hour (forecast)", mw: solar.drop }];
+    const losses = [{ what: largestUnit.name, mw: largestUnit.mw }, { what: "Regional import (tie-line trip)", mw: s.ppa }, { what: solar.sky && solar.sky.mw >= solar.fcDrop ? `Solar drop, sky ${solar.sky.name} (${solar.sky.pct} % of output)` : "Solar drop within the hour (forecast)", mw: solar.drop }];
     const largest = losses.reduce((a, l) => (l.mw > a.mw ? l : a));
     const margin = reserve - largest.mw;
     const supply = sync + s.ppa + solar.now;
@@ -76,7 +89,7 @@ export default function DispatchPanel({ live }) {
                 <td><NumberIn value={u.mw} onChange={(v) => updUnit("thermal", i, "mw", v)} /> MW</td><td className="sub">{u.on ? `${f1(u.cap - u.mw)} MW spare` : "off"}</td></tr>
             ))}
             <tr><td>Regional import now (MW)</td><td><NumberIn value={s.ppa} onChange={(v) => upd("ppa", v)} /></td><td className="sub">limit <NumberIn value={s.ppaLimit} onChange={(v) => upd("ppaLimit", v)} w={56} /> MW</td></tr>
-            <tr><td>Solar now (live)</td><td><b>{f1(solar.now)} MW</b></td><td className="sub">could fall to {f1(solar.minNext)} MW within the hour</td></tr>
+            <tr><td>Solar now (live)</td><td><b>{f1(solar.now)} MW</b></td><td className="sub">could fall to {f1(solar.minNext)} MW within the hour{solar.sky ? ` · sky ${solar.sky.name}: hold ${f1(solar.sky.mw)} MW (${solar.sky.pct} %)` : ""}</td></tr>
             <tr><td>Minimum synchronous share</td><td><NumberIn value={s.minSyncPct} onChange={(v) => upd("minSyncPct", v)} /> %</td><td className="sub">your rule</td></tr>
           </tbody></table>
         </div>
