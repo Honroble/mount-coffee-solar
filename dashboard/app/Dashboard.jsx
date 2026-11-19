@@ -4,6 +4,7 @@ import HourlyPeak from "./HourlyPeak";
 import AskAI from "./AskAI";
 import SystemBanner from "./SystemBanner";
 import PerformanceSection from "./PerformanceSection";
+import ForecastCheck from "./ForecastCheck";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -411,6 +412,7 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, acc
       <AskAI />
       <LiveSection live={live} />
       <HourlyPeak />
+      <ForecastCheck score={liveScore} />
       <PerformanceSection />
       <WeatherSection live={live} />
       <VerificationSection />

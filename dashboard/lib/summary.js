@@ -81,7 +81,10 @@ export function liveScore() {
   const rows = parseCsv(fs.readFileSync(logFile, "utf8"));
   const head = rows[0];
   const col = (r, name) => Number(r[head.indexOf(name)]);
-  const acc = { 15: [], 30: [], 60: [] };
+  const SHIFTS = [-10, -5, 0, 5, 10, 15, 20, 25, 30];
+  // slot by target time (GMT): morning ramp, midday, afternoon
+  const slotOf = (t) => { const h = new Date(t).getUTCHours() + new Date(t).getUTCMinutes() / 60; return h < 10.25 ? "ramp" : h < 14.5 ? "midday" : "afternoon"; };
+  const recs = { 15: [], 30: [], 60: [] };
   let first = null, last = null;
   for (const r of rows.slice(1)) {
     if (!(r[head.indexOf("status")] || "").startsWith("ok")) continue;
@@ -91,19 +94,35 @@ export function liveScore() {
     for (const h of [15, 30, 60]) {
       const cs = col(r, `clear_sky_${h}min_mw`);
       if (!(cs >= 1)) continue; // daylight only
-      const truth = mean15(t + h * 60000);
+      const truth = mean15(t + h * 60000);  // the target: mean output over the 15 minutes ending at t + h
       if (truth === null) continue;
-      acc[h].push([Math.abs(col(r, `p_${h}min_mw`) - truth), Math.abs(now - truth)]);
+      const fc = col(r, `p_${h}min_mw`);
+      // the same forecast against the actual shifted by s minutes: if the best match is at s > 0 the forecast is late
+      const shifted = SHIFTS.map((sm) => { const v = mean15(t + (h - sm) * 60000); return v === null ? null : Math.abs(fc - v); });
+      recs[h].push({ t, err: fc - truth, pers: Math.abs(now - truth), shifted, slot: slotOf(t + h * 60000) });
       first = first === null ? t : Math.min(first, t); last = last === null ? t : Math.max(last, t);
     }
   }
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const r2 = (v) => (v === null ? null : +v.toFixed(2));
+  const score = (a) => {
+    if (!a.length) return { n: 0 };
+    const mae = avg(a.map((x) => Math.abs(x.err))), pers = avg(a.map((x) => x.pers));
+    const byShift = SHIFTS.map((sm, i) => ({ shift_min: sm, mae_mw: r2(avg(a.map((x) => x.shifted[i]).filter((v) => v !== null))) }));
+    const best = byShift.filter((x) => x.mae_mw !== null).reduce((p, q) => (q.mae_mw < p.mae_mw ? q : p));
+    const slots = ["ramp", "midday", "afternoon"].map((sl) => {
+      const b = a.filter((x) => x.slot === sl);
+      return { slot: sl, n: b.length, mae_mw: r2(avg(b.map((x) => Math.abs(x.err)))), bias_mw: r2(avg(b.map((x) => x.err))), persistence_mae_mw: r2(avg(b.map((x) => x.pers))) };
+    });
+    return { n: a.length, mae_mw: r2(mae), bias_mw: r2(avg(a.map((x) => x.err))), persistence_mae_mw: r2(pers),
+             skill_pct: pers ? Math.round((1 - mae / pers) * 100) : null, best_shift_min: best.shift_min, by_shift: byShift, slots };
+  };
+  const weekAgo = (last ?? 0) - 7 * 86400000;
   const value = {
     from: first ? new Date(first).toISOString() : null, to: last ? new Date(last).toISOString() : null,
     horizons: [15, 30, 60].map((h) => {
-      const a = acc[h];
-      if (!a.length) return { horizon_min: h, n: 0 };
-      const m = (i) => +(a.reduce((s, x) => s + x[i], 0) / a.length).toFixed(2);
-      return { horizon_min: h, n: a.length, mae_mw: m(0), persistence_mae_mw: m(1) };
+      const s = score(recs[h]);
+      return { horizon_min: h, n: s.n, mae_mw: s.mae_mw, persistence_mae_mw: s.persistence_mae_mw, check: s, last7: score(recs[h].filter((x) => x.t >= weekAgo)) };
     }),
   };
   scoreCache = { key, value };
