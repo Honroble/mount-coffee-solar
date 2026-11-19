@@ -59,7 +59,7 @@ def hourly_actuals(paths):
                     t = datetime.strptime(r[0] + " " + r[1], "%d.%m.%Y %H:%M:%S")
                 except ValueError:
                     continue
-                if v in SENT or v < -0.1 or v > 20:
+                if v != v or v in SENT or v < -0.1 or v > 20:      # the logger writes 'nan' for some minutes
                     continue
                 end = (t - timedelta(seconds=1)).replace(minute=0, second=0) + timedelta(hours=1)
                 a = acc.setdefault(end, [0.0, 0])

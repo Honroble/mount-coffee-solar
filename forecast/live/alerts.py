@@ -107,7 +107,7 @@ def read_logger_today(live, group, now):
                 v = float(r[i].replace(",", ".")) if i < len(r) and r[i] != "" else None
             except ValueError:
                 v = None
-            vals[h] = None if v in SENT else v
+            vals[h] = None if v is None or v != v or v in SENT else v      # 'nan' from the logger -> missing
         out.append((t, vals))
     return head, out
 
@@ -372,6 +372,16 @@ def main():
                                timeout=600, capture_output=True)
             except Exception:
                 pass
+    # nightly backup of the data files to Google Drive (backup_drive.py): first run after midnight GMT
+    blog = os.path.join(live, "backup_log.txt")
+    last_backup = datetime.fromtimestamp(os.path.getmtime(blog), timezone.utc).date() if os.path.exists(blog) else None
+    if last_backup is not None and last_backup < now.date():
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "backup_drive.py"), "--config", a.config],
+                           timeout=1500, capture_output=True)
+        except Exception:
+            pass
     found, widgets = checks(cfg, live, now)
     for kind, key, text in found:
         last = state.get(key)

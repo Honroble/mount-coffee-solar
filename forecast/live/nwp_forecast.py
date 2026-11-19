@@ -287,7 +287,7 @@ def daily_actuals(live):
                 v = float(r[k].replace(",", "."))
             except ValueError:
                 continue
-            if v in SENT or v < -0.1 or v > 20:
+            if v != v or v in SENT or v < -0.1 or v > 20:      # the logger writes 'nan' for some minutes
                 continue
             dd, mm, yyyy = r[0].split(".")
             date = f"{yyyy}-{mm}-{dd}"

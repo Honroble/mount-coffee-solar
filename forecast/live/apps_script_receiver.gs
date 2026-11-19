@@ -21,6 +21,7 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.token !== TOKEN) return reply({ok: false, error: 'bad token'});
+    if (body.action === 'backup') return saveBackup(body);   // BACKUP (backup.gs): nightly data files to Drive
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
