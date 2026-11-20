@@ -59,7 +59,7 @@ export default function PerformanceSection() {
         </select>
       </div>
       <div className="grid kpis" style={{ marginBottom: 10 }}>
-        <Kpi label={`PR, ${sel?.date ?? ""}`} value={f1(sel?.pr_pct)} unit="%" note={`temperature-corrected ${f1(sel?.pr_temp_pct)} % · 30-day ${f1(s.pr)} %`} />
+        <Kpi label={`PR, ${sel?.date ?? ""}`} value={sel?.pr_pct == null ? "not yet" : f1(sel?.pr_pct)} unit={sel?.pr_pct == null ? "" : "%"} note={`temperature-corrected ${f1(sel?.pr_temp_pct)} % · 30-day ${f1(s.pr)} %`} />
         <Kpi label="Availability" value={f1(sel?.availability_pct)} unit="%" note={`30-day ${f1(s.availability)} % · inverters that reported`} />
         <Kpi label="Specific yield" value={f1(sel?.specific_yield, 2)} unit="kWh/kWp" note={`30-day average ${f1(s.specific_yield, 2)}`} />
         <Kpi label="Sunlight" value={f1(sel?.insolation_kwh_m2, 2)} unit="kWh/m²" note="horizontal, STS3" />

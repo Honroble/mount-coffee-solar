@@ -75,7 +75,7 @@ function useLive(initial) {
   return live;
 }
 
-function LiveSection({ live }) {
+function LiveSection({ live, trimNight = false }) {
   const f = live.latestForecast;
   const n = useNow();
   const w = n?.latest;
@@ -124,8 +124,12 @@ function LiveSection({ live }) {
       if (fc.cs15 !== null) put(slot(t0 + 7.5 * 60000), "cs", fc.cs15);
     }
     const from = live.now.slice(0, 10) + "T05:30:00.000Z";   // today's daylight only
-    return [...m.values()].filter((p) => p.t >= from).sort((a, b) => (a.t < b.t ? -1 : 1));
-  }, [live, n]);
+    const all = [...m.values()].filter((p) => p.t >= from).sort((a, b) => (a.t < b.t ? -1 : 1));
+    if (!trimNight) return all;
+    // new layout: start 30 min before the first actual above 0.05 MW (no hour of flat night)
+    const first = all.findIndex((p) => (p.actual ?? 0) > 0.05);
+    return first > 6 ? all.slice(first - 6) : all;
+  }, [live, n, trimNight]);
 
   return (
     <section className="panel">
@@ -366,11 +370,144 @@ function Frequency({ rows }) {
   );
 }
 
+
+// ---- Layout choice: "new" (tabs, compact) or "classic" (the single long page as of 19 Nov 2026). Remembered in this
+// browser; ?view=classic or ?view=new in the address also sets it.
+const VIEW_KEY = "mcsolar-view";
+function useView() {
+  const [view, setV] = useState("new");
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("view");
+      const v = q === "classic" || q === "new" ? q : localStorage.getItem(VIEW_KEY);
+      if (v === "classic" || v === "new") setV(v);
+    } catch { /* default */ }
+  }, []);
+  const setView = (v) => { setV(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } };
+  return [view, setView];
+}
+
+function ViewSwitch({ view, setView }) {
+  return (
+    <div className="viewswitch">
+      Layout:
+      <button className={view === "new" ? "on" : ""} onClick={() => setView("new")}>New</button>
+      <button className={view === "classic" ? "on" : ""} onClick={() => setView("classic")}>Classic</button>
+    </div>
+  );
+}
+
+const TABS = [
+  ["live", "Live"], ["forecast", "Forecast"], ["performance", "Performance"],
+  ["health", "Plant health"], ["history", "History"], ["verification", "Verification"],
+];
+
+// Click the first explanation line of a section to show the rest (new layout keeps sections short).
+function useExplainToggle() {
+  useEffect(() => {
+    const onClick = (e) => {
+      const el = e.target.closest(".v2 h2 + .sub, .v2 .panel-head .sub");
+      if (el && !e.target.closest("a,button,select,input")) el.classList.toggle("open");
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+}
+
+function NewLayout({ live, s, liveAcc, liveFrom, liveScore, replayDates, initialReplay, energyAll, daily, inverterHealth, frequency, setView }) {
+  const [tab, setTab] = useState("live");
+  useEffect(() => {
+    const fromHash = () => { const h = window.location.hash.slice(1); if (TABS.some(([k]) => k === h)) setTab(h); };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
+  useExplainToggle();
+  const go = (k) => { setTab(k); try { history.replaceState(null, "", `#${k}`); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
+  const lagMin = live.collector.lastPlant ? Math.round((Date.now() - Date.parse(live.collector.lastPlant)) / 60000) : null;
+  const dataState = lagMin === null ? "off" : lagMin <= 6 ? "ok" : lagMin <= 20 ? "stale" : "off";
+  return (
+    <main className="v2">
+      <header className="v2head">
+        <div className="brand">
+          <img src="/lec-logo.png" alt="Liberia Electricity Corporation" width={60} height={60} />
+          <div>
+            <div className="org">Liberia Electricity Corporation · SCADA/EMS</div>
+            <h1>Mount Coffee Solar</h1>
+          </div>
+        </div>
+        <div className="v2tools">
+          <span className={`status ${dataState}`}><span className={`dot ${dataState}`} /> {dataState === "ok" ? "Data live" : dataState === "stale" ? "Data delayed" : "No recent data"} · logger {live.collector.lastPlant ? live.collector.lastPlant.slice(11, 16) : "—"} GMT</span>
+          <a className="btn" href="/tv">Control-room screen →</a>
+          <ViewSwitch view="new" setView={setView} />
+        </div>
+      </header>
+      <SystemBanner />
+      <RampBanner />
+      <div className="v2summary">
+        <b>{s.energy_mwh.toLocaleString()} MWh</b> since {s.first} · average normal day <b>{s.avg_day_mwh} MWh</b> ·
+        15-min forecast error <b>{liveAcc?.n ? liveAcc.mae_mw : s.mae15} MW</b> (repeat-last {liveAcc?.n ? liveAcc.persistence_mae_mw : s.persist15} MW)
+      </div>
+      <nav className="tabs" role="tablist">
+        {TABS.map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => go(k)}>{label}</button>
+        ))}
+      </nav>
+
+      {tab === "live" && <>
+        <LiveSection live={live} trimNight />
+        <DispatchPanel live={live} />
+        <PlantNow live={live} />
+      </>}
+      {tab === "forecast" && <>
+        <WeatherSection live={live} />
+        <ForecastCheck score={liveScore} />
+        <Replay dates={replayDates} initial={initialReplay} />
+      </>}
+      {tab === "performance" && <>
+        <PerformanceSection />
+        <HourlyPeak />
+        <DailyEnergy daily={daily} />
+      </>}
+      {tab === "health" && <>
+        <HealthSection live={live} />
+        <InverterHealth data={inverterHealth} />
+        <IrradianceSection live={live} />
+      </>}
+      {tab === "history" && <>
+        <div className="grid kpis">
+          <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" note={`${s.days} days, ${s.first} to ${s.last}`} />
+          <Kpi label="Average normal day" value={s.avg_day_mwh} unit="MWh" note={`${s.normal_days} full days`} />
+          <Kpi label="Best day" value={s.best_mwh} unit="MWh" note={s.best_day} />
+          <Kpi label="Best hour (logger)" value={s.best_hour ? s.best_hour.mwh.toFixed(1) : "—"} unit="MWh" note={s.best_hour ? `${s.best_hour.date} ${String(s.best_hour.h).padStart(2, "0")}:00 GMT` : ""} />
+          <Kpi label="15-min forecast error" value={liveAcc?.n ? liveAcc.mae_mw : s.mae15} unit="MW" note={liveAcc?.n ? `live since ${liveFrom} · testing ${s.mae15} MW` : "in testing"} />
+          <Kpi label="Median grid frequency" value={s.median_hz.toFixed(2)} unit="Hz" note="normal 49.8–50.2 Hz" />
+        </div>
+        <EnergyHistory rows={energyAll} live={live} />
+        <Frequency rows={frequency} />
+        <section className="panel">
+          <h2>About this data</h2>
+          <div className="sub">LEC Mount Coffee PV plant · 21.17 MWp DC / 17.79 MWac · export limit 16.64 MW · 52 inverters in STS1–STS4 · times are GMT (Liberia time).
+            Energy is inverter-side (logger), about 1.9 % above the J07 grid export; days to {s.operator_last || s.first} come from the J07 reports.
+            {s.missing.length > 0 && <> No data: {fmtDates(s.missing)}.</>}{s.partial.length > 0 && <> Part days: {fmtDates(s.partial)}.</>}
+            {" "}Live data from {live.source === "this PC" || !live.source ? `this PC (${live.liveDir})` : `forecast PC ${live.source}`}.
+            {live.servedFrom?.length ? <> Open from another PC: {live.servedFrom.join("  ·  ")}</> : null}</div>
+        </section>
+      </>}
+      {tab === "verification" && <VerificationSection />}
+      <AskAI />
+    </main>
+  );
+}
+
 export default function Dashboard({ liveScore, summary: s, daily, energyAll, inverterHealth, frequency, replayDates, initialReplay, initialLive }) {
   const live = useLive(initialLive);
   const liveAcc = liveScore?.horizons?.find((h) => h.horizon_min === 15);
   const liveFrom = liveScore?.from ? new Date(liveScore.from).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : "";
-  return (
+  const [view, setView] = useView();
+  if (view === "classic") return (
+    <>
+      <ViewSwitch view={view} setView={setView} />
     <main>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div className="brand">
@@ -429,5 +566,8 @@ export default function Dashboard({ liveScore, summary: s, daily, energyAll, inv
         {live.servedFrom?.length ? <> Open this dashboard from another PC: {live.servedFrom.join("  ·  ")}</> : null}
       </div>
     </main>
+  
+    </>
   );
+  return <NewLayout {...{ live, s, liveAcc, liveFrom, liveScore, replayDates, initialReplay, energyAll, daily, inverterHealth, frequency, setView }} />;
 }
