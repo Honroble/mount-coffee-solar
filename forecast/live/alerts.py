@@ -372,6 +372,16 @@ def main():
                                timeout=600, capture_output=True)
             except Exception:
                 pass
+    # daily DC string check (string_check.py), once after 14:00 GMT on the midday window
+    if now.hour >= 14:
+        sc = os.path.join(live, f"string_check_{now:%Y%m%d}.json")
+        if not os.path.exists(sc):
+            try:
+                import subprocess
+                subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "string_check.py"), "--config", a.config],
+                               timeout=900, capture_output=True)
+            except Exception:
+                pass
     # nightly backup of the data files to Google Drive (backup_drive.py): first run after midnight GMT
     blog = os.path.join(live, "backup_log.txt")
     last_backup = datetime.fromtimestamp(os.path.getmtime(blog), timezone.utc).date() if os.path.exists(blog) else None
