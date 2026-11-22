@@ -394,3 +394,32 @@ inv,iv2,STS4.INV9.alarm_code
 inv,iv2,STS4.INV9.work_state_01
 inv,iv2,STS4.INV9.internal_temperature
 inv,iv2,STS4.INV9.array_R_iso
+grid,iv1,P07 (OUTGOING FEEDER ).Eexp_10_4
+grid,iv1,P07 (OUTGOING FEEDER ).Eexp_10_8
+grid,iv1,P07 (OUTGOING FEEDER ).Eimp_10_4
+grid,iv1,P07 (OUTGOING FEEDER ).Eimp_10_8
+grid,iv1,P07 (OUTGOING FEEDER ).Phase-to-earth voltage VA
+grid,iv1,P07 (OUTGOING FEEDER ).Phase-to-earth voltage VB
+grid,iv1,P07 (OUTGOING FEEDER ).Phase-to-earth voltage VC
+grid,iv1,P07 (OUTGOING FEEDER ).EqExp_10_4
+grid,iv1,P07 (OUTGOING FEEDER ).EqExp_10_8
+grid,iv1,P07 (OUTGOING FEEDER ).EqImp_10_4
+grid,iv1,P07 (OUTGOING FEEDER ).EqImp_10_8
+grid,iv1,P07 (OUTGOING FEEDER ).C.B Test
+grid,iv1,P07 (OUTGOING FEEDER ).C.B Service
+grid,iv1,P07 (OUTGOING FEEDER ).E.S ON
+grid,iv1,P07 (OUTGOING FEEDER ).E.S OFF
+grid,iv1,P01 - MVSTS 1..2.Eexp_10_4
+grid,iv1,P01 - MVSTS 1..2.Eexp_10_8
+grid,iv1,P01 - MVSTS 1..2.Eimp_10_4
+grid,iv1,P01 - MVSTS 1..2.Eimp_10_8
+grid,iv1,P01 - MVSTS 1..2.Phase-to-earth voltage VA
+grid,iv1,P01 - MVSTS 1..2.Phase-to-earth voltage VB
+grid,iv1,P01 - MVSTS 1..2.Phase-to-earth voltage VC
+grid,iv1,P04 - MVSTS 3..5.Eexp_10_4
+grid,iv1,P04 - MVSTS 3..5.Eexp_10_8
+grid,iv1,P04 - MVSTS 3..5.Eimp_10_4
+grid,iv1,P04 - MVSTS 3..5.Eimp_10_8
+grid,iv1,P04 - MVSTS 3..5.Phase-to-earth voltage VA
+grid,iv1,P04 - MVSTS 3..5.Phase-to-earth voltage VB
+grid,iv1,P04 - MVSTS 3..5.Phase-to-earth voltage VC
