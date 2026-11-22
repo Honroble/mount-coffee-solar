@@ -6,6 +6,7 @@ import SystemBanner from "./SystemBanner";
 import PerformanceSection from "./PerformanceSection";
 import ForecastCheck from "./ForecastCheck";
 import RampBanner from "./RampBanner";
+import GridStrings from "./GridStrings";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -471,6 +472,7 @@ function NewLayout({ live, s, liveAcc, liveFrom, liveScore, replayDates, initial
       </>}
       {tab === "health" && <>
         <HealthSection live={live} />
+        <GridStrings />
         <InverterHealth data={inverterHealth} />
         <IrradianceSection live={live} />
       </>}
