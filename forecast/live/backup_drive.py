@@ -23,7 +23,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DAILY = re.compile(r"^(iv1_live|iv2_live|now)_(\d{8})\.csv$")
+DAILY = re.compile(r"^(iv1_live|iv2_live|now|grid_live|ctrl_live|inv_live)_(\d{8})\.csv$")
 LIVE_EXTRA = ["kpi_daily.json", "nwp_calibration.json", "nwp_daily_log.csv", "nwp_hourly_log.csv", "forecast_log.csv",
               "verification_ledger.csv", "verification_days.csv", "widget_log.csv"]
 MAX_BYTES = 30 * 1024 * 1024      # compressed size limit per file (Apps Script accepts ~50 MB per request)

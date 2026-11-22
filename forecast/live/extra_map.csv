@@ -1,0 +1,396 @@
+file,group,local_channel
+grid,iv1,P07 (OUTGOING FEEDER ).Active power
+grid,iv1,P07 (OUTGOING FEEDER ).Reactive power
+grid,iv1,P07 (OUTGOING FEEDER ).Apparent power
+grid,iv1,P07 (OUTGOING FEEDER ).Power factor
+grid,iv1,P07 (OUTGOING FEEDER ).Frequency
+grid,iv1,P07 (OUTGOING FEEDER ).Line-to-line voltage VAB
+grid,iv1,P07 (OUTGOING FEEDER ).Line-to-line voltage VBC
+grid,iv1,P07 (OUTGOING FEEDER ).Line-to-line voltage VCA
+grid,iv1,P07 (OUTGOING FEEDER ).Phase current IA
+grid,iv1,P07 (OUTGOING FEEDER ).Phase current IB
+grid,iv1,P07 (OUTGOING FEEDER ).Phase current IC
+grid,iv1,P07 (OUTGOING FEEDER ).Energy Eexp
+grid,iv1,P07 (OUTGOING FEEDER ).Energy Eimp
+grid,iv1,P07 (OUTGOING FEEDER ).Energy EqExp
+grid,iv1,P07 (OUTGOING FEEDER ).Energy EqImp
+grid,iv1,P07 (OUTGOING FEEDER ).C.B ON
+grid,iv1,P07 (OUTGOING FEEDER ).C.B OFF
+grid,iv1,P07 (OUTGOING FEEDER ).total number of happened trip
+grid,iv1,P07 (OUTGOING FEEDER ).General Phase Fault
+grid,iv1,P07 (OUTGOING FEEDER ).General Earth Fault
+grid,iv1,P07 (OUTGOING FEEDER ).Remote_Local State
+grid,iv1,P07 (OUTGOING FEEDER ).IN_residual current
+grid,iv1,P01 - MVSTS 1..2.Active power
+grid,iv1,P01 - MVSTS 1..2.Reactive power
+grid,iv1,P01 - MVSTS 1..2.Power factor
+grid,iv1,P01 - MVSTS 1..2.Line-to-line voltage VAB
+grid,iv1,P01 - MVSTS 1..2.Energy Eexp
+grid,iv1,P01 - MVSTS 1..2.Energy Eimp
+grid,iv1,P01 - MVSTS 1..2.C.B ON
+grid,iv1,P01 - MVSTS 1..2.C.B OFF
+grid,iv1,P01 - MVSTS 1..2.total number of happened trip
+grid,iv1,P04 - MVSTS 3..5.Active power
+grid,iv1,P04 - MVSTS 3..5.Reactive power
+grid,iv1,P04 - MVSTS 3..5.Power factor
+grid,iv1,P04 - MVSTS 3..5.Line-to-line voltage VAB
+grid,iv1,P04 - MVSTS 3..5.Energy Eexp
+grid,iv1,P04 - MVSTS 3..5.Energy Eimp
+grid,iv1,P04 - MVSTS 3..5.C.B ON
+grid,iv1,P04 - MVSTS 3..5.C.B OFF
+grid,iv1,P04 - MVSTS 3..5.total number of happened trip
+ctrl,iv2,Reactive Power.Measure_Voltage
+ctrl,iv2,Reactive Power.Measure_Voltage_pu
+ctrl,iv2,Reactive Power.Measure_PowerFactor
+ctrl,iv2,Reactive Power.Power_Setpoint
+ctrl,iv2,Reactive Power.Power_Output
+ctrl,iv2,Setpoint.Q_user
+ctrl,iv2,Setpoint.Q_active
+ctrl,iv2,Setpoint.CosPhi_User
+ctrl,iv2,Setpoint.PowerLimit_User
+ctrl,iv2,Setpoint.Power Limit O&M
+ctrl,iv2,Active Power.Power_Apparent
+ctrl,iv2,Active Power.Power_Inverters
+ctrl,iv2,Information.Inverter sum Q
+ctrl,iv2,Janitza.PQM-1.Psum3=P1+P2+P3
+ctrl,iv2,Janitza.PQM-1.Qsum3=Q1+Q2+Q3
+ctrl,iv2,Janitza.PQM-1.Sum Ssum3=S1+S2+S3
+ctrl,iv2,Janitza.PQM-1.CosPhi_sum
+ctrl,iv2,Janitza.PQM-1.Measured frequency
+ctrl,iv2,Janitza.PQM-1.Voltage L1-L2
+ctrl,iv2,Janitza.PQM-1.Voltage L2-L3
+ctrl,iv2,Janitza.PQM-1.Voltage L3-L1
+ctrl,iv2,Janitza.PQM-1.Real energy L1..L3 delivered
+ctrl,iv2,Janitza.PQM-1.Real energy L1..L3 consumed
+ctrl,iv2,Janitza.PQM-2.Psum3=P1+P2+P3
+ctrl,iv2,Janitza.PQM-2.Qsum3=Q1+Q2+Q3
+ctrl,iv2,Janitza.PQM-2.Sum Ssum3=S1+S2+S3
+ctrl,iv2,Janitza.PQM-2.CosPhi_sum
+ctrl,iv2,Janitza.PQM-2.Measured frequency
+ctrl,iv2,Janitza.PQM-2.Voltage L1-L2
+ctrl,iv2,Janitza.PQM-2.Voltage L2-L3
+ctrl,iv2,Janitza.PQM-2.Voltage L3-L1
+ctrl,iv2,Janitza.PQM-2.Real energy L1..L3 delivered
+ctrl,iv2,Janitza.PQM-2.Real energy L1..L3 consumed
+ctrl,iv2,Janitza.PQM-3.Psum3=P1+P2+P3
+ctrl,iv2,Janitza.PQM-3.Qsum3=Q1+Q2+Q3
+ctrl,iv2,Janitza.PQM-3.Sum Ssum3=S1+S2+S3
+ctrl,iv2,Janitza.PQM-3.CosPhi_sum
+ctrl,iv2,Janitza.PQM-3.Measured frequency
+ctrl,iv2,Janitza.PQM-3.Voltage L1-L2
+ctrl,iv2,Janitza.PQM-3.Voltage L2-L3
+ctrl,iv2,Janitza.PQM-3.Voltage L3-L1
+ctrl,iv2,Janitza.PQM-3.Real energy L1..L3 delivered
+ctrl,iv2,Janitza.PQM-3.Real energy L1..L3 consumed
+inv,iv2,STS1.INV01.reactive_power_total
+inv,iv2,STS1.INV01.dc_power_total
+inv,iv2,STS1.INV01.alarm_code
+inv,iv2,STS1.INV01.work_state_01
+inv,iv2,STS1.INV01.internal_temperature
+inv,iv2,STS1.INV01.array_R_iso
+inv,iv2,STS1.INV02.reactive_power_total
+inv,iv2,STS1.INV02.dc_power_total
+inv,iv2,STS1.INV02.alarm_code
+inv,iv2,STS1.INV02.work_state_01
+inv,iv2,STS1.INV02.internal_temperature
+inv,iv2,STS1.INV02.array_R_iso
+inv,iv2,STS1.INV03.reactive_power_total
+inv,iv2,STS1.INV03.dc_power_total
+inv,iv2,STS1.INV03.alarm_code
+inv,iv2,STS1.INV03.work_state_01
+inv,iv2,STS1.INV03.internal_temperature
+inv,iv2,STS1.INV03.array_R_iso
+inv,iv2,STS1.INV04.reactive_power_total
+inv,iv2,STS1.INV04.dc_power_total
+inv,iv2,STS1.INV04.alarm_code
+inv,iv2,STS1.INV04.work_state_01
+inv,iv2,STS1.INV04.internal_temperature
+inv,iv2,STS1.INV04.array_R_iso
+inv,iv2,STS1.INV05.reactive_power_total
+inv,iv2,STS1.INV05.dc_power_total
+inv,iv2,STS1.INV05.alarm_code
+inv,iv2,STS1.INV05.work_state_01
+inv,iv2,STS1.INV05.internal_temperature
+inv,iv2,STS1.INV05.array_R_iso
+inv,iv2,STS1.INV06.reactive_power_total
+inv,iv2,STS1.INV06.dc_power_total
+inv,iv2,STS1.INV06.alarm_code
+inv,iv2,STS1.INV06.work_state_01
+inv,iv2,STS1.INV06.internal_temperature
+inv,iv2,STS1.INV06.array_R_iso
+inv,iv2,STS1.INV07.reactive_power_total
+inv,iv2,STS1.INV07.dc_power_total
+inv,iv2,STS1.INV07.alarm_code
+inv,iv2,STS1.INV07.work_state_01
+inv,iv2,STS1.INV07.internal_temperature
+inv,iv2,STS1.INV07.array_R_iso
+inv,iv2,STS1.INV08.reactive_power_total
+inv,iv2,STS1.INV08.dc_power_total
+inv,iv2,STS1.INV08.alarm_code
+inv,iv2,STS1.INV08.work_state_01
+inv,iv2,STS1.INV08.internal_temperature
+inv,iv2,STS1.INV08.array_R_iso
+inv,iv2,STS1.INV09.reactive_power_total
+inv,iv2,STS1.INV09.dc_power_total
+inv,iv2,STS1.INV09.alarm_code
+inv,iv2,STS1.INV09.work_state_01
+inv,iv2,STS1.INV09.internal_temperature
+inv,iv2,STS1.INV09.array_R_iso
+inv,iv2,STS1.INV10.reactive_power_total
+inv,iv2,STS1.INV10.dc_power_total
+inv,iv2,STS1.INV10.alarm_code
+inv,iv2,STS1.INV10.work_state_01
+inv,iv2,STS1.INV10.internal_temperature
+inv,iv2,STS1.INV10.array_R_iso
+inv,iv2,STS1.INV11.reactive_power_total
+inv,iv2,STS1.INV11.dc_power_total
+inv,iv2,STS1.INV11.alarm_code
+inv,iv2,STS1.INV11.work_state_01
+inv,iv2,STS1.INV11.internal_temperature
+inv,iv2,STS1.INV11.array_R_iso
+inv,iv2,STS1.INV12.reactive_power_total
+inv,iv2,STS1.INV12.dc_power_total
+inv,iv2,STS1.INV12.alarm_code
+inv,iv2,STS1.INV12.work_state_01
+inv,iv2,STS1.INV12.internal_temperature
+inv,iv2,STS1.INV12.array_R_iso
+inv,iv2,STS1.INV13.reactive_power_total
+inv,iv2,STS1.INV13.dc_power_total
+inv,iv2,STS1.INV13.alarm_code
+inv,iv2,STS1.INV13.work_state_01
+inv,iv2,STS1.INV13.internal_temperature
+inv,iv2,STS1.INV13.array_R_iso
+inv,iv2,STS1.INV14.reactive_power_total
+inv,iv2,STS1.INV14.dc_power_total
+inv,iv2,STS1.INV14.alarm_code
+inv,iv2,STS1.INV14.work_state_01
+inv,iv2,STS1.INV14.internal_temperature
+inv,iv2,STS1.INV14.array_R_iso
+inv,iv2,STS2.INV01.reactive_power_total
+inv,iv2,STS2.INV01.dc_power_total
+inv,iv2,STS2.INV01.alarm_code
+inv,iv2,STS2.INV01.work_state_01
+inv,iv2,STS2.INV01.internal_temperature
+inv,iv2,STS2.INV01.array_R_iso
+inv,iv2,STS2.INV02.reactive_power_total
+inv,iv2,STS2.INV02.dc_power_total
+inv,iv2,STS2.INV02.alarm_code
+inv,iv2,STS2.INV02.work_state_01
+inv,iv2,STS2.INV02.internal_temperature
+inv,iv2,STS2.INV02.array_R_iso
+inv,iv2,STS2.INV03.reactive_power_total
+inv,iv2,STS2.INV03.dc_power_total
+inv,iv2,STS2.INV03.alarm_code
+inv,iv2,STS2.INV03.work_state_01
+inv,iv2,STS2.INV03.internal_temperature
+inv,iv2,STS2.INV03.array_R_iso
+inv,iv2,STS2.INV04.reactive_power_total
+inv,iv2,STS2.INV04.dc_power_total
+inv,iv2,STS2.INV04.alarm_code
+inv,iv2,STS2.INV04.work_state_01
+inv,iv2,STS2.INV04.internal_temperature
+inv,iv2,STS2.INV04.array_R_iso
+inv,iv2,STS2.INV05.reactive_power_total
+inv,iv2,STS2.INV05.dc_power_total
+inv,iv2,STS2.INV05.alarm_code
+inv,iv2,STS2.INV05.work_state_01
+inv,iv2,STS2.INV05.internal_temperature
+inv,iv2,STS2.INV05.array_R_iso
+inv,iv2,STS2.INV06.reactive_power_total
+inv,iv2,STS2.INV06.dc_power_total
+inv,iv2,STS2.INV06.alarm_code
+inv,iv2,STS2.INV06.work_state_01
+inv,iv2,STS2.INV06.internal_temperature
+inv,iv2,STS2.INV06.array_R_iso
+inv,iv2,STS2.INV07.reactive_power_total
+inv,iv2,STS2.INV07.dc_power_total
+inv,iv2,STS2.INV07.alarm_code
+inv,iv2,STS2.INV07.work_state_01
+inv,iv2,STS2.INV07.internal_temperature
+inv,iv2,STS2.INV07.array_R_iso
+inv,iv2,STS2.INV08.reactive_power_total
+inv,iv2,STS2.INV08.dc_power_total
+inv,iv2,STS2.INV08.alarm_code
+inv,iv2,STS2.INV08.work_state_01
+inv,iv2,STS2.INV08.internal_temperature
+inv,iv2,STS2.INV08.array_R_iso
+inv,iv2,STS2.INV09.reactive_power_total
+inv,iv2,STS2.INV09.dc_power_total
+inv,iv2,STS2.INV09.alarm_code
+inv,iv2,STS2.INV09.work_state_01
+inv,iv2,STS2.INV09.internal_temperature
+inv,iv2,STS2.INV09.array_R_iso
+inv,iv2,STS2.INV10.reactive_power_total
+inv,iv2,STS2.INV10.dc_power_total
+inv,iv2,STS2.INV10.alarm_code
+inv,iv2,STS2.INV10.work_state_01
+inv,iv2,STS2.INV10.internal_temperature
+inv,iv2,STS2.INV10.array_R_iso
+inv,iv2,STS2.INV11.reactive_power_total
+inv,iv2,STS2.INV11.dc_power_total
+inv,iv2,STS2.INV11.alarm_code
+inv,iv2,STS2.INV11.work_state_01
+inv,iv2,STS2.INV11.internal_temperature
+inv,iv2,STS2.INV11.array_R_iso
+inv,iv2,STS2.INV12.reactive_power_total
+inv,iv2,STS2.INV12.dc_power_total
+inv,iv2,STS2.INV12.alarm_code
+inv,iv2,STS2.INV12.work_state_01
+inv,iv2,STS2.INV12.internal_temperature
+inv,iv2,STS2.INV12.array_R_iso
+inv,iv2,STS2.INV13.reactive_power_total
+inv,iv2,STS2.INV13.dc_power_total
+inv,iv2,STS2.INV13.alarm_code
+inv,iv2,STS2.INV13.work_state_01
+inv,iv2,STS2.INV13.internal_temperature
+inv,iv2,STS2.INV13.array_R_iso
+inv,iv2,STS2.INV14.reactive_power_total
+inv,iv2,STS2.INV14.dc_power_total
+inv,iv2,STS2.INV14.alarm_code
+inv,iv2,STS2.INV14.work_state_01
+inv,iv2,STS2.INV14.internal_temperature
+inv,iv2,STS2.INV14.array_R_iso
+inv,iv2,STS3.INV01.reactive_power_total
+inv,iv2,STS3.INV01.dc_power_total
+inv,iv2,STS3.INV01.alarm_code
+inv,iv2,STS3.INV01.work_state_01
+inv,iv2,STS3.INV01.internal_temperature
+inv,iv2,STS3.INV01.array_R_iso
+inv,iv2,STS3.INV02.reactive_power_total
+inv,iv2,STS3.INV02.dc_power_total
+inv,iv2,STS3.INV02.alarm_code
+inv,iv2,STS3.INV02.work_state_01
+inv,iv2,STS3.INV02.internal_temperature
+inv,iv2,STS3.INV02.array_R_iso
+inv,iv2,STS3.INV03.reactive_power_total
+inv,iv2,STS3.INV03.dc_power_total
+inv,iv2,STS3.INV03.alarm_code
+inv,iv2,STS3.INV03.work_state_01
+inv,iv2,STS3.INV03.internal_temperature
+inv,iv2,STS3.INV03.array_R_iso
+inv,iv2,STS3.INV04.reactive_power_total
+inv,iv2,STS3.INV04.dc_power_total
+inv,iv2,STS3.INV04.alarm_code
+inv,iv2,STS3.INV04.work_state_01
+inv,iv2,STS3.INV04.internal_temperature
+inv,iv2,STS3.INV04.array_R_iso
+inv,iv2,STS3.INV05.reactive_power_total
+inv,iv2,STS3.INV05.dc_power_total
+inv,iv2,STS3.INV05.alarm_code
+inv,iv2,STS3.INV05.work_state_01
+inv,iv2,STS3.INV05.internal_temperature
+inv,iv2,STS3.INV05.array_R_iso
+inv,iv2,STS3.INV06.reactive_power_total
+inv,iv2,STS3.INV06.dc_power_total
+inv,iv2,STS3.INV06.alarm_code
+inv,iv2,STS3.INV06.work_state_01
+inv,iv2,STS3.INV06.internal_temperature
+inv,iv2,STS3.INV06.array_R_iso
+inv,iv2,STS3.INV07.reactive_power_total
+inv,iv2,STS3.INV07.dc_power_total
+inv,iv2,STS3.INV07.alarm_code
+inv,iv2,STS3.INV07.work_state_01
+inv,iv2,STS3.INV07.internal_temperature
+inv,iv2,STS3.INV07.array_R_iso
+inv,iv2,STS3.INV08.reactive_power_total
+inv,iv2,STS3.INV08.dc_power_total
+inv,iv2,STS3.INV08.alarm_code
+inv,iv2,STS3.INV08.work_state_01
+inv,iv2,STS3.INV08.internal_temperature
+inv,iv2,STS3.INV08.array_R_iso
+inv,iv2,STS3.INV09.reactive_power_total
+inv,iv2,STS3.INV09.dc_power_total
+inv,iv2,STS3.INV09.alarm_code
+inv,iv2,STS3.INV09.work_state_01
+inv,iv2,STS3.INV09.internal_temperature
+inv,iv2,STS3.INV09.array_R_iso
+inv,iv2,STS3.INV10.reactive_power_total
+inv,iv2,STS3.INV10.dc_power_total
+inv,iv2,STS3.INV10.alarm_code
+inv,iv2,STS3.INV10.work_state_01
+inv,iv2,STS3.INV10.internal_temperature
+inv,iv2,STS3.INV10.array_R_iso
+inv,iv2,STS3.INV11.reactive_power_total
+inv,iv2,STS3.INV11.dc_power_total
+inv,iv2,STS3.INV11.alarm_code
+inv,iv2,STS3.INV11.work_state_01
+inv,iv2,STS3.INV11.internal_temperature
+inv,iv2,STS3.INV11.array_R_iso
+inv,iv2,STS3.INV12.reactive_power_total
+inv,iv2,STS3.INV12.dc_power_total
+inv,iv2,STS3.INV12.alarm_code
+inv,iv2,STS3.INV12.work_state_01
+inv,iv2,STS3.INV12.internal_temperature
+inv,iv2,STS3.INV12.array_R_iso
+inv,iv2,STS4.INV1.reactive_power_total
+inv,iv2,STS4.INV1.dc_power_total
+inv,iv2,STS4.INV1.alarm_code
+inv,iv2,STS4.INV1.work_state_01
+inv,iv2,STS4.INV1.internal_temperature
+inv,iv2,STS4.INV1.array_R_iso
+inv,iv2,STS4.INV10.reactive_power_total
+inv,iv2,STS4.INV10.dc_power_total
+inv,iv2,STS4.INV10.alarm_code
+inv,iv2,STS4.INV10.work_state_01
+inv,iv2,STS4.INV10.internal_temperature
+inv,iv2,STS4.INV10.array_R_iso
+inv,iv2,STS4.INV11.reactive_power_total
+inv,iv2,STS4.INV11.dc_power_total
+inv,iv2,STS4.INV11.alarm_code
+inv,iv2,STS4.INV11.work_state_01
+inv,iv2,STS4.INV11.internal_temperature
+inv,iv2,STS4.INV11.array_R_iso
+inv,iv2,STS4.INV12.reactive_power_total
+inv,iv2,STS4.INV12.dc_power_total
+inv,iv2,STS4.INV12.alarm_code
+inv,iv2,STS4.INV12.work_state_01
+inv,iv2,STS4.INV12.internal_temperature
+inv,iv2,STS4.INV12.array_R_iso
+inv,iv2,STS4.INV2.reactive_power_total
+inv,iv2,STS4.INV2.dc_power_total
+inv,iv2,STS4.INV2.alarm_code
+inv,iv2,STS4.INV2.work_state_01
+inv,iv2,STS4.INV2.internal_temperature
+inv,iv2,STS4.INV2.array_R_iso
+inv,iv2,STS4.INV3.reactive_power_total
+inv,iv2,STS4.INV3.dc_power_total
+inv,iv2,STS4.INV3.alarm_code
+inv,iv2,STS4.INV3.work_state_01
+inv,iv2,STS4.INV3.internal_temperature
+inv,iv2,STS4.INV3.array_R_iso
+inv,iv2,STS4.INV4.reactive_power_total
+inv,iv2,STS4.INV4.dc_power_total
+inv,iv2,STS4.INV4.alarm_code
+inv,iv2,STS4.INV4.work_state_01
+inv,iv2,STS4.INV4.internal_temperature
+inv,iv2,STS4.INV4.array_R_iso
+inv,iv2,STS4.INV5.reactive_power_total
+inv,iv2,STS4.INV5.dc_power_total
+inv,iv2,STS4.INV5.alarm_code
+inv,iv2,STS4.INV5.work_state_01
+inv,iv2,STS4.INV5.internal_temperature
+inv,iv2,STS4.INV5.array_R_iso
+inv,iv2,STS4.INV6.reactive_power_total
+inv,iv2,STS4.INV6.dc_power_total
+inv,iv2,STS4.INV6.alarm_code
+inv,iv2,STS4.INV6.work_state_01
+inv,iv2,STS4.INV6.internal_temperature
+inv,iv2,STS4.INV6.array_R_iso
+inv,iv2,STS4.INV7.reactive_power_total
+inv,iv2,STS4.INV7.dc_power_total
+inv,iv2,STS4.INV7.alarm_code
+inv,iv2,STS4.INV7.work_state_01
+inv,iv2,STS4.INV7.internal_temperature
+inv,iv2,STS4.INV7.array_R_iso
+inv,iv2,STS4.INV8.reactive_power_total
+inv,iv2,STS4.INV8.dc_power_total
+inv,iv2,STS4.INV8.alarm_code
+inv,iv2,STS4.INV8.work_state_01
+inv,iv2,STS4.INV8.internal_temperature
+inv,iv2,STS4.INV8.array_R_iso
+inv,iv2,STS4.INV9.reactive_power_total
+inv,iv2,STS4.INV9.dc_power_total
+inv,iv2,STS4.INV9.alarm_code
+inv,iv2,STS4.INV9.work_state_01
+inv,iv2,STS4.INV9.internal_temperature
+inv,iv2,STS4.INV9.array_R_iso

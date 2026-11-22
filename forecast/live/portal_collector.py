@@ -21,6 +21,7 @@ import io
 import json
 import os
 import pickle
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
@@ -235,6 +236,27 @@ def parse_csv(text):
     return header, body
 
 
+def load_extra(path=os.path.join(HERE, "extra_map.csv")):
+    """Extra read-only channels saved to their own daily files: grid (22 kV feeder relays P07/P01/P04),
+    ctrl (plant controller setpoints, Janitza power-quality meters), inv (inverter reactive/DC power, alarm, state)."""
+    if not os.path.exists(path):
+        return {}
+    out = {}
+    with open(path, encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            if re.search(r"cmd|Execute|select|Cancel|operation", r["local_channel"], re.I):   # never command channels
+                continue
+            out.setdefault((r["file"], r["group"]), []).append(r["local_channel"])
+    return out
+
+
+def units_of(text):
+    rows = [r for r in csv.reader(io.StringIO(text[:200000]), delimiter=";") if r]
+    if len(rows) > 1 and rows[1] and rows[1][0].startswith("["):
+        return {h: u.strip("[]") for h, u in zip(rows[0], rows[1])}
+    return {}
+
+
 def last_stamp(path):
     if not os.path.exists(path):
         return None
@@ -329,6 +351,16 @@ def main():
             missing = [m["local_channel"] for m in rows if m["local_channel"] not in header]
             n = append(cfg["live_dir"], group, rows, header, body)
             log_lines.append(f"{group}: +{n} rows" + (f", {len(missing)} channels missing" if missing else ""))
+        for (fname, group), chans in load_extra().items():
+            try:
+                text = p.download(group, chans, beg, now)
+                header, body = parse_csv(text)
+                u = units_of(text)
+                rows = [{"local_channel": c, "unit": u.get(c, "")} for c in chans]
+                n = append(cfg["live_dir"], fname, rows, header, body)
+                log_lines.append(f"{fname}: +{n} rows")
+            except Exception as e:   # extra channels must never stop the main collection
+                log_lines.append(f"{fname} failed: {str(e)[:120]}")
         try:
             w = read_widgets(p, cfg)
             save_widgets(cfg["live_dir"], w)
