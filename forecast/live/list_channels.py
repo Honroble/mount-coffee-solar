@@ -30,17 +30,57 @@ def main():
     html = r.text
     with open(os.path.join(live, "logger_download_page.html"), "w", encoding="utf-8") as fh:
         fh.write(html)
-    # channel names look like "STS1.INV01.active_power_total" or "FPE.PV.STS1.WS600.wind_speed_avg."
-    cand = set(re.findall(r'["\'>]([A-Za-z][A-Za-z0-9_ \-]*(?:\.[A-Za-z0-9_ \-]*)+)["\'<]', html))
-    names = sorted(c.strip() for c in cand if 3 < len(c) < 140 and not c.lower().startswith(("http", "www", "cgi")) and
-                   not re.search(r"\.(js|css|png|jpg|gif|ico|html|json|csv)$", c, re.I))
+    # the page loads its channel list with JavaScript: save the scripts so the request can be found
+    root = p.base.rsplit("/cgi-bin", 1)[0]
+    for js in ("download.js", "download_react.js"):
+        try:
+            jr = p.s.get(f"{root}/js/{js}", timeout=60, headers={"Referer": f"{p.base}/download"})
+            with open(os.path.join(live, f"logger_{js}"), "w", encoding="utf-8") as fh:
+                fh.write(jr.text)
+            print(f"saved logger_{js} ({len(jr.text)} bytes, HTTP {jr.status_code})")
+        except Exception as e:
+            print(f"{js}: {e}")
+    # the Datafiles page asks the logger for each interval's channel names: channel_names?iv=iv1|iv2|iv3
+    import json as _json
+    names, per = [], {}
+    for iv in ("iv1", "iv2", "iv3", "iv4"):
+        try:
+            cr = p.s.get(f"{p.base}/channel_names?iv={iv}", timeout=60, headers={"Referer": f"{p.base}/download"})
+            if cr.status_code >= 400:
+                print(f"{iv}: HTTP {cr.status_code}")
+                continue
+            data = cr.json()
+        except Exception as e:
+            print(f"{iv}: {e}"[:200])
+            continue
+        with open(os.path.join(live, f"logger_channels_{iv}.json"), "w", encoding="utf-8") as fh:
+            _json.dump(data, fh, indent=0)
+        found = []
+        def walk(x):
+            if isinstance(x, dict):
+                for k in ("n", "name", "Name"):
+                    if isinstance(x.get(k), str):
+                        found.append(x[k])
+                for v in x.values():
+                    walk(v)
+            elif isinstance(x, list):
+                for v in x:
+                    if isinstance(v, str):
+                        found.append(v)
+                    else:
+                        walk(v)
+        walk(data)
+        per[iv] = found
+        names += [f"{iv}\t{n}" for n in found]
+        print(f"{iv}: {len(found)} channels")
     with open(os.path.join(live, "logger_channels.txt"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(names) + "\n")
-    hits = [n for n in names if KEYS.search(n)]
-    print(f"HTTP {r.status_code}, page {len(html)} bytes, {len(names)} channel-like names saved to logger_channels.txt")
-    print(f"{len(hits)} look like grid metering / reactive power / voltage / energy:")
-    for n in hits[:200]:
+    hits = [n for n in names if KEYS.search(n.split("\t", 1)[1])]
+    print(f"{len(names)} channel names saved to logger_channels.txt; {len(hits)} look like grid metering / reactive power / voltage / energy:")
+    for n in hits[:150]:
         print("  ", n)
+    if len(hits) > 150:
+        print(f"   ... and {len(hits) - 150} more in logger_channels.txt")
     p.save()
 
 
