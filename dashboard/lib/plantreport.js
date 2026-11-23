@@ -32,7 +32,12 @@ const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m %
 
 export function plantDay(date) {
   const ymd = date.replace(/-/g, "");
-  const w = read("iv1", ymd), p = read("iv2", ymd), g = read("grid", ymd);
+  const w = read("iv1", ymd), p = read("iv2", ymd), g = read("grid", ymd), iv = read("inv", ymd);
+  const dcCols = iv ? iv.header.map((h, i) => [h, i]).filter(([h]) => /\.dc_power_total$/.test(h)).map(([, i]) => i) : [];
+  const gP = g ? ["P01 - MVSTS 1..2", "P04 - MVSTS 3..5"].map((k) => g.ix(`${k}.Active power`)) : [];
+  const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, export_kwh: 0, inverter_kwh: 0, irradiation_wh_m2: 0, dc_kwh: 0, n_export: 0, n_dc: 0 }));
+  let dcE = 0, acWithDc = 0, expWithDc = 0, dcWithExp = 0;
+  const limitMins = [], ratio = [];
   if (!w && !p) return null;
   const W = w && {
     up: ["FPE.PV.STS1.Pyranometer.up.irradiation_temp_compensated", "FPE.PV.STS3.Pyranometer.up.irradiation_temp_compensated"].map(w.ix),
@@ -69,7 +74,7 @@ export function plantDay(date) {
       const ups = W.up.map((i) => (i >= 0 ? num(wr[i]) : null));
       if (ups[0] !== null) up1.push(ups[0]); if (ups[1] !== null) up2.push(ups[1]);
       const v = ups.filter((x) => x !== null && x >= 0);
-      if (v.length) { G0 = mean(v); H += G0 / 60; }
+      if (v.length) { G0 = mean(v); H += G0 / 60; hourly[Math.floor(m / 60)].irradiation_wh_m2 += G0 / 60; }
       const tm = num(wr[W.tmod]);
       if (G0 !== null && tm !== null && G0 > LIGHT) { Hw += G0; tw += G0 * tm; }
       if (tm !== null) tmodMax = tmodMax === null ? tm : Math.max(tmodMax, tm);
@@ -95,6 +100,23 @@ export function plantDay(date) {
         if (medKw > 20) { availAll++; if (kw > 1) availOk++; if (kw <= 1) (outage[inv] ||= []).push(m); }
       }
       invE += tot / 60;
+      hourly[Math.floor(m / 60)].inverter_kwh += tot / 60;
+      // DC input of the same minute (inverter file) for efficiency
+      const ir = iv && iv.rows.get(t);
+      if (ir && dcCols.length) {
+        let dc = 0, n = 0;
+        for (const i of dcCols) { const x = num(ir[i]); if (x !== null) { dc += Math.max(0, x); n++; } }
+        if (n >= dcCols.length * 0.9 && dc > 500) {
+          dcE += dc / 60; acWithDc += tot / 60; hourly[Math.floor(m / 60)].dc_kwh += dc / 60; hourly[Math.floor(m / 60)].n_dc++;
+          const gr2 = g && g.rows.get(t);
+          const ex = gr2 ? gP.map((i) => (i >= 0 ? num(gr2[i]) : null)) : [null];
+          if (ex.every((x) => x !== null)) { expWithDc += Math.max(0, ex[0] + ex[1]) / 60; dcWithExp += dc / 60; }
+        }
+      }
+      // ratio of actual output to irradiance, for the curtailment estimate (unlimited minutes only)
+      const set0 = num(pr[iSet]);
+      const limited = set0 !== null && set0 > 0 && tot >= 0.97 * set0 * 1000;
+      if (G0 !== null && G0 > 300) { if (limited) limitMins.push([G0, tot]); else if (tot > 1000) ratio.push(tot / ((G0 / 1000) * DC_KWP)); }
       const set = num(pr[iSet]);                            // export setpoint, MW
       if (set !== null) {
         if (spLast !== null && Math.abs(set - spLast) >= 0.01) events.push({ time: t, kind: "setpoint change", what: `export setpoint ${spLast.toFixed(2)} → ${set.toFixed(2)} MW` });
@@ -105,6 +127,8 @@ export function plantDay(date) {
     // grid events
     const gr = g && g.rows.get(t);
     if (gr) {
+      const ex = gP.map((i) => (i >= 0 ? num(gr[i]) : null));
+      if (ex.every((x) => x !== null)) { hourly[Math.floor(m / 60)].export_kwh += Math.max(0, ex[0] + ex[1]) / 60; hourly[Math.floor(m / 60)].n_export++; }
       for (const x of G) {
         const st = num(gr[x.on]) === 1 && num(gr[x.off]) !== 1 ? "closed" : num(gr[x.off]) === 1 ? "open" : null;
         const tr = num(gr[x.trip]), fault = (num(gr[x.pf]) ? "phase fault" : "") + (num(gr[x.ef]) ? " earth fault" : "");
@@ -154,6 +178,10 @@ export function plantDay(date) {
   if (w && !up1.length) sensor.push("STS1 pyranometer: no readings");
   if (w && !up2.length) sensor.push("STS3 pyranometer: no readings");
   if (w && !ws.length) sensor.push("weather station WS600: no readings");
+  // curtailment estimate: in minutes at the export limit, what the plant would have made at that day's
+  // typical output per unit irradiance (median of unlimited sunny minutes), minus what it made
+  const k = ratio.length >= 30 ? ratio.slice().sort((a, b) => a - b)[Math.floor(ratio.length / 2)] : null;
+  const curtKwh = k === null ? null : limitMins.reduce((sum, [G0, tot]) => sum + Math.max(0, (G0 / 1000) * DC_KWP * k - tot) / 60, 0);
   const wd = sinW.length ? ((Math.atan2(mean(sinW), mean(cosW)) * 180) / Math.PI + 360) % 360 : null;
 
   return {
@@ -162,6 +190,13 @@ export function plantDay(date) {
     pr_pct: r(pr, 1), pr_temp_corr_pct: r(prT, 1), tmod_weighted_c: r(tEff, 1), tmod_max_c: r(tmodMax, 1),
     availability_pct: availAll ? r((availOk / availAll) * 100, 1) : null,
     minutes_at_limit: limitMin,
+    curtailed_mwh_est: curtKwh === null ? null : r(curtKwh / 1000, 2),
+    inverter_eff_pct: dcE > 100 ? r((acWithDc / dcE) * 100, 1) : null,
+    plant_eff_pct: dcWithExp > 100 ? r((expWithDc / dcWithExp) * 100, 1) : null,
+    dc_mwh: dcE > 0 ? r(dcE / 1000, 2) : null,
+    hourly: hourly.map((x) => ({ hour: x.hour, export_kwh: x.n_export ? Math.round(x.export_kwh) : null, inverter_kwh: Math.round(x.inverter_kwh),
+      dc_kwh: Math.round(x.dc_kwh) || null, irradiation_wh_m2: Math.round(x.irradiation_wh_m2),
+      export_min: x.n_export, dc_min: x.n_dc })),
     setpoint_mw: r(spLast, 2), setpoint_min_mw: r(spMin, 2), setpoint_max_mw: r(spMax, 2),
     tamb_mean_c: r(mean(tamb), 1), rh_mean_pct: r(mean(rh), 0), pressure_hpa: r(mean(pa), 1),
     wind_mean_ms: r(mean(ws) === null ? null : mean(ws) / 3.6, 1), wind_max_ms: r(wmax, 1), wind_dir_deg: r(wd, 0),

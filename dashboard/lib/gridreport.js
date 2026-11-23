@@ -129,9 +129,19 @@ export function gridReport() {
 }
 
 const COLS = ["date", "export_mwh", "inverter_mwh", "j07_mwh", "irradiation_kwh_m2", "pr_pct", "pr_temp_corr_pct", "availability_pct",
-  "minutes_at_limit", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
+  "minutes_at_limit", "curtailed_mwh_est", "dc_mwh", "inverter_eff_pct", "plant_eff_pct", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
   "specific_yield", "p07_ratio", "f_min", "f_max", "v_min_kv", "v_max_kv", "trips", "breaker_open_min", "coverage_pct", "partial"];
 export function gridCsv() {
   const rows = gridDays().slice().reverse();
   return [COLS.join(","), ...rows.map((d) => COLS.map((k) => (d[k] === null || d[k] === undefined ? "" : d[k])).join(","))].join("\n") + "\n";
+}
+
+export function hourlyCsv() {
+  const rows = gridDays().slice().reverse();
+  const out = ["date,hour_gmt,export_kwh,export_minutes,inverter_kwh,dc_kwh,dc_minutes,irradiation_wh_m2"];
+  for (const d of rows) for (const h of d.hourly || []) {
+    if (!h.inverter_kwh && !h.export_kwh && !h.irradiation_wh_m2) continue;
+    out.push([d.date, `${String(h.hour).padStart(2, "0")}:00`, h.export_kwh ?? "", h.export_min ?? "", h.inverter_kwh ?? "", h.dc_kwh ?? "", h.dc_min ?? "", h.irradiation_wh_m2 ?? ""].join(","));
+  }
+  return out.join("\n") + "\n";
 }

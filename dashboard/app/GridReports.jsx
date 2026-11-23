@@ -2,6 +2,39 @@
 // Grid & reports tab: daily and monthly export from P01 + P04 (P07 under-reads until repaired), KPIs and CSV download.
 import { useEffect, useState } from "react";
 
+function Hourly({ days }) {
+  const withH = days.filter((d) => d.hourly);
+  const [sel, setSel] = useState(null);
+  const day = withH.find((d) => d.date === sel) || withH[0];
+  if (!day) return null;
+  const rows = day.hourly.filter((h) => h.inverter_kwh || h.export_kwh || h.irradiation_wh_m2 > 5);
+  const max = Math.max(1, ...rows.map((h) => Math.max(h.inverter_kwh || 0, h.export_kwh || 0)));
+  return (
+    <section className="panel">
+      <div className="panel-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h2>Hourly generation</h2>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {withH.slice(0, 7).map((d) => (
+            <button key={d.date} className="btn" style={d.date === day.date ? { borderColor: "#f5a524" } : undefined} onClick={() => setSel(d.date)}>{d.date.slice(5)}</button>
+          ))}
+          <a className="btn" href="/api/grid/report?format=hourly-csv" download>Download hourly CSV</a>
+        </div>
+      </div>
+      <div className="sub">Energy in each hour (GMT, hour starting): export from P01 + P04, inverter AC output and DC input, and irradiation on the up-facing pyranometers. * = some minutes of that hour missing (reads low).</div>
+      <table style={{ marginTop: 8 }}>
+        <thead><tr><th>Hour</th><th className="num">Export (kWh)</th><th className="num">Inverters AC (kWh)</th><th className="num">DC input (kWh)</th><th className="num">Irradiation (Wh/m²)</th><th style={{ width: "35%" }}></th></tr></thead>
+        <tbody>{rows.map((h) => (
+          <tr key={h.hour}><td>{String(h.hour).padStart(2, "0")}:00</td><td className={`num ${h.export_kwh !== null && h.inverter_kwh > 50 && h.export_min < 55 ? "warn-text" : ""}`} title={`${h.export_min} of 60 minutes recorded`}>{h.export_kwh ?? "—"}{h.export_kwh !== null && h.inverter_kwh > 50 && h.export_min < 55 ? "*" : ""}</td><td className="num">{h.inverter_kwh}</td><td className={`num ${h.dc_kwh && h.dc_min < 55 ? "warn-text" : ""}`}>{h.dc_kwh ?? "—"}{h.dc_kwh && h.dc_min < 55 ? "*" : ""}</td><td className="num">{h.irradiation_wh_m2}</td>
+            <td><div style={{ height: 8, borderRadius: 4, background: "#f0c000", width: `${((h.export_kwh ?? h.inverter_kwh) / max) * 100}%` }} /></td></tr>
+        ))}</tbody>
+        <tfoot><tr><td><b>Total</b></td><td className="num"><b>{rows.some((h) => h.export_kwh !== null) ? rows.reduce((a, h) => a + (h.export_kwh || 0), 0).toLocaleString() : "—"}</b></td>
+          <td className="num"><b>{rows.reduce((a, h) => a + (h.inverter_kwh || 0), 0).toLocaleString()}</b></td><td className="num"><b>{rows.reduce((a, h) => a + (h.dc_kwh || 0), 0).toLocaleString() || "—"}</b></td>
+          <td className="num"><b>{rows.reduce((a, h) => a + (h.irradiation_wh_m2 || 0), 0).toLocaleString()}</b></td><td /></tr></tfoot>
+      </table>
+    </section>
+  );
+}
+
 const f = (v, d = 1) => (v === null || v === undefined ? "—" : Number(v).toFixed(d));
 
 function Kpi({ label, value, unit, note, small }) {
@@ -44,6 +77,9 @@ export default function GridReports() {
           <Kpi label="Irradiation" value={f(today.irradiation_kwh_m2, 2)} unit="kWh/m²" note={`${today.minutes_at_limit ?? "—"} min at the export limit`} />
           <Kpi label="Export setpoint" value={f(g.control?.setpoint_mw ?? today.setpoint_mw, 2)} unit="MW"
             note={`power limit ${g.control?.power_limit_pct ?? "—"} % · ${(today.events || []).filter((e) => e.kind === "setpoint change").length} changes today`} />
+          <Kpi label="Efficiency" value={f(today.plant_eff_pct ?? today.inverter_eff_pct, 1)} unit="%"
+            note={today.plant_eff_pct != null ? `DC to export · inverters alone ${f(today.inverter_eff_pct, 1)} %` : "inverters, DC to AC"} />
+          <Kpi label="Energy curtailed (estimate)" value={f(today.curtailed_mwh_est, 2)} unit="MWh" note={`${today.minutes_at_limit ?? "—"} min at the export limit`} />
           <Kpi small label="Grid frequency" value={`${f(today.f_min, 2)}–${f(today.f_max, 2)}`} unit="Hz" note="day range at P07" />
           <Kpi small label="Grid voltage (VAB)" value={`${f(today.v_min_kv, 1)}–${f(today.v_max_kv, 1)}`} unit="kV" note={`${today.trips} trips · breakers open ${today.breaker_open_min} min in daylight`} />
         </div>
@@ -53,10 +89,10 @@ export default function GridReports() {
           <h2>Daily grid report</h2>
           <a className="btn" href="/api/grid/report?format=csv" download>Download CSV</a>
         </div>
-        <div className="sub">{g.note} Days with under 95 % of daylight minutes recorded (PC off) are marked and read low. PR = inverter energy ÷ (irradiation × 21.17 MWp), using the up-facing pyranometers as the plane-of-array reference (confirm their tilt on site); temperature-corrected PR uses −0.35 %/°C from 25 °C.</div>
+        <div className="sub">{g.note} Days with under 95 % of daylight minutes recorded (PC off) are marked and read low. PR = inverter energy ÷ (irradiation × 21.17 MWp), using the up-facing pyranometers as the plane-of-array reference (confirm their tilt on site); temperature-corrected PR uses −0.35 %/°C from 25 °C. Efficiency: inverters = AC ÷ DC; plant = export (P01 + P04) ÷ DC, so it includes transformer and cable losses. Curtailed energy is an estimate: in minutes at the export limit, the output the plant would have made at that day's typical output per unit irradiance, minus what it made.</div>
         <div className="scroll" style={{ marginTop: 8, maxHeight: "none" }}>
           <table>
-            <thead><tr><th>Date</th><th className="num">Export (MWh)</th><th className="num">J07 report (MWh)</th><th className="num">Inverters (MWh)</th><th className="num">Irr. (kWh/m²)</th><th className="num">PR (%)</th><th className="num">PR temp-corr. (%)</th><th className="num">Avail. (%)</th><th className="num">Setpoint (MW)</th><th className="num">At limit (min)</th><th className="num">Peak (MW)</th>
+            <thead><tr><th>Date</th><th className="num">Export (MWh)</th><th className="num">J07 report (MWh)</th><th className="num">Inverters (MWh)</th><th className="num">Irr. (kWh/m²)</th><th className="num">PR (%)</th><th className="num">PR temp-corr. (%)</th><th className="num">Avail. (%)</th><th className="num">Setpoint (MW)</th><th className="num">At limit (min)</th><th className="num">Curtailed est. (MWh)</th><th className="num">Inv. eff. (%)</th><th className="num">Plant eff. (%)</th><th className="num">Peak (MW)</th>
               <th className="num">CF (%)</th><th className="num">Yield (kWh/kWp)</th><th className="num">Op. hours</th><th className="num">Q (Mvarh)</th>
               <th className="num">P07 ÷ P01+P04</th><th className="num">f range (Hz)</th><th className="num">Trips</th><th className="num">Data (%)</th></tr></thead>
             <tbody>
@@ -72,6 +108,9 @@ export default function GridReports() {
                   <td className={`num ${d.availability_pct !== null && d.availability_pct !== undefined && d.availability_pct < 98 ? "warn-text" : ""}`}>{f(d.availability_pct, 1)}</td>
                   <td className="num">{d.setpoint_min_mw == null ? "—" : d.setpoint_min_mw === d.setpoint_max_mw ? f(d.setpoint_max_mw, 2) : `${f(d.setpoint_min_mw, 2)}–${f(d.setpoint_max_mw, 2)}`}</td>
                   <td className="num">{d.minutes_at_limit ?? "—"}</td>
+                  <td className="num">{f(d.curtailed_mwh_est, 2)}</td>
+                  <td className="num">{f(d.inverter_eff_pct, 1)}</td>
+                  <td className="num">{f(d.plant_eff_pct, 1)}</td>
                   <td className="num">{f(d.peak_mw, 1)}</td>
                   <td className="num">{f(d.capacity_factor_pct, 1)}</td>
                   <td className="num">{f(d.specific_yield, 2)}</td>
@@ -88,6 +127,7 @@ export default function GridReports() {
         </div>
         {full.length === 0 && <div className="sub" style={{ marginTop: 6 }}>Feeder data started on 22 Nov 2026 at 15:45 GMT, so the first full day is 23 Nov.</div>}
       </section>
+      <Hourly days={g.days} />
       <div className="grid two">
         <section className="panel">
           <h2>Station comparison</h2>
