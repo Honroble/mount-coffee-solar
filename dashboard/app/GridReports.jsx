@@ -2,6 +2,52 @@
 // Grid & reports tab: daily and monthly export from P01 + P04 (P07 under-reads until repaired), KPIs and CSV download.
 import { useEffect, useState } from "react";
 
+const KIND_BG = { ok: "#1f6f3f", idle: "#3a4656", warn: "#8a6d12", bad: "#8b2b2b", off: "#2a313c" };
+
+function Alarms({ days }) {
+  const d = days.find((x) => x.inverters);
+  if (!d) return null;
+  const inv = Object.entries(d.inverters);
+  const stations = [...new Set(inv.map(([k]) => k.split(".")[0]))];
+  const lowIso = inv.filter(([, v]) => v.iso_min_kohm !== null && v.iso_min_kohm < 100).sort((a, b) => a[1].iso_min_kohm - b[1].iso_min_kohm);
+  const t = inv.find(([, v]) => v.time)?.[1].time;
+  return (
+    <section className="panel">
+      <h2>Inverter alarms and states</h2>
+      <div className="sub">Alarm codes and operating states as the inverters report them, {d.date}{d.partial ? " so far" : ""}. Code meanings follow Sungrow's published lists (confirm the inverter make). Energy lost is an estimate: inverter-minutes stopped by an alarm or fault in daylight, at that day's typical output per unit irradiance.</div>
+      <div className="grid two" style={{ marginTop: 8 }}>
+        <div>
+          {d.alarms?.length ? (
+            <table>
+              <thead><tr><th>Alarm</th><th className="num">Inverters</th><th>From–to (GMT)</th><th className="num">Inverter-min</th></tr></thead>
+              <tbody>{d.alarms.map((a) => (
+                <tr key={a.code}><td className="warn-text">{a.name} <span style={{ color: "#8b98a8" }}>({a.code})</span></td><td className="num" title={a.inverters.join(", ")}>{a.inverters.length}</td>
+                  <td>{a.from}–{a.to}</td><td className="num">{a.minutes}</td></tr>
+              ))}</tbody>
+            </table>
+          ) : <div className="empty">No inverter alarms.</div>}
+          <div className="sub" style={{ marginTop: 6 }}>Estimated energy lost to inverter alarms and faults: <b>{f(d.fault_lost_mwh_est, 2)} MWh</b></div>
+          {lowIso.length ? <div className="sub" style={{ marginTop: 6 }}>Lowest insulation resistance while running (below 100 kΩ): <span className="warn-text">{lowIso.slice(0, 12).map(([k, v]) => `${k} ${v.iso_min_kohm} kΩ`).join(", ")}{lowIso.length > 12 ? ` and ${lowIso.length - 12} more` : ""}</span></div> : null}
+        </div>
+        <div>
+          <div className="sub" style={{ marginBottom: 6 }}>State now{t ? ` (${t} GMT)` : ""}: green run, grey standby/starting, amber alarm or derating, red fault.</div>
+          {stations.map((st) => (
+            <div key={st} style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+              <span style={{ width: 40, color: "#8b98a8", fontSize: 12 }}>{st}</span>
+              {inv.filter(([k]) => k.startsWith(st + ".")).sort((a, b) => Number(a[0].split("INV")[1]) - Number(b[0].split("INV")[1])).map(([k, v]) => (
+                <span key={k} title={`${k}: ${v.state}${v.alarm ? ` · ${v.alarm_name} (${v.alarm})` : ""} · ${v.alarm_minutes} alarm min today · max ${f(v.temp_max_c, 0)} °C`}
+                  style={{ background: KIND_BG[v.alarm ? "warn" : v.kind] || KIND_BG.warn, borderRadius: 4, padding: "2px 5px", fontSize: 11, minWidth: 26, textAlign: "center" }}>
+                  {k.split(".")[1].replace("INV", "")}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Hourly({ days }) {
   const withH = days.filter((d) => d.hourly);
   const [sel, setSel] = useState(null);
@@ -92,7 +138,7 @@ export default function GridReports() {
         <div className="sub">{g.note} Days with under 95 % of daylight minutes recorded (PC off) are marked and read low. PR = inverter energy ÷ (irradiation × 21.17 MWp), using the up-facing pyranometers as the plane-of-array reference (confirm their tilt on site); temperature-corrected PR uses −0.35 %/°C from 25 °C. Efficiency: inverters = AC ÷ DC; plant = export (P01 + P04) ÷ DC, so it includes transformer and cable losses. Curtailed energy is an estimate: in minutes at the export limit, the output the plant would have made at that day's typical output per unit irradiance, minus what it made.</div>
         <div className="scroll" style={{ marginTop: 8, maxHeight: "none" }}>
           <table>
-            <thead><tr><th>Date</th><th className="num">Export (MWh)</th><th className="num">J07 report (MWh)</th><th className="num">Inverters (MWh)</th><th className="num">Irr. (kWh/m²)</th><th className="num">PR (%)</th><th className="num">PR temp-corr. (%)</th><th className="num">Avail. (%)</th><th className="num">Setpoint (MW)</th><th className="num">At limit (min)</th><th className="num">Curtailed est. (MWh)</th><th className="num">Inv. eff. (%)</th><th className="num">Plant eff. (%)</th><th className="num">Peak (MW)</th>
+            <thead><tr><th>Date</th><th className="num">Export (MWh)</th><th className="num">J07 report (MWh)</th><th className="num">Inverters (MWh)</th><th className="num">Irr. (kWh/m²)</th><th className="num">PR (%)</th><th className="num">PR temp-corr. (%)</th><th className="num">Avail. (%)</th><th className="num">Setpoint (MW)</th><th className="num">At limit (min)</th><th className="num">Curtailed est. (MWh)</th><th className="num">Lost to alarms est. (MWh)</th><th className="num">Inv. eff. (%)</th><th className="num">Plant eff. (%)</th><th className="num">Peak (MW)</th>
               <th className="num">CF (%)</th><th className="num">Yield (kWh/kWp)</th><th className="num">Op. hours</th><th className="num">Q (Mvarh)</th>
               <th className="num">P07 ÷ P01+P04</th><th className="num">f range (Hz)</th><th className="num">Trips</th><th className="num">Data (%)</th></tr></thead>
             <tbody>
@@ -109,6 +155,7 @@ export default function GridReports() {
                   <td className="num">{d.setpoint_min_mw == null ? "—" : d.setpoint_min_mw === d.setpoint_max_mw ? f(d.setpoint_max_mw, 2) : `${f(d.setpoint_min_mw, 2)}–${f(d.setpoint_max_mw, 2)}`}</td>
                   <td className="num">{d.minutes_at_limit ?? "—"}</td>
                   <td className="num">{f(d.curtailed_mwh_est, 2)}</td>
+                  <td className={`num ${d.fault_lost_mwh_est > 0.5 ? "warn-text" : ""}`}>{f(d.fault_lost_mwh_est, 2)}</td>
                   <td className="num">{f(d.inverter_eff_pct, 1)}</td>
                   <td className="num">{f(d.plant_eff_pct, 1)}</td>
                   <td className="num">{f(d.peak_mw, 1)}</td>
@@ -127,6 +174,7 @@ export default function GridReports() {
         </div>
         {full.length === 0 && <div className="sub" style={{ marginTop: 6 }}>Feeder data started on 22 Nov 2026 at 15:45 GMT, so the first full day is 23 Nov.</div>}
       </section>
+      <Alarms days={g.days} />
       <Hourly days={g.days} />
       <div className="grid two">
         <section className="panel">
@@ -151,7 +199,7 @@ export default function GridReports() {
         </section>
         <section className="panel">
           <h2>Events</h2>
-          <div className="sub">Breaker changes, trips and faults on P07/P01/P04; changes to the export setpoint; grid frequency outside 49.5–50.5 Hz; inverters off for 15+ min while the rest of the plant produced. Last 7 days, newest first.</div>
+          <div className="sub">Breaker changes, trips and faults on P07/P01/P04; changes to the export setpoint; inverter alarms; grid frequency outside 49.5–50.5 Hz; inverters off for 15+ min while the rest of the plant produced. Last 7 days, newest first.</div>
           {events.length === 0 ? <div className="empty">No events.</div> : (
             <div className="scroll" style={{ marginTop: 8 }}>
               <table>

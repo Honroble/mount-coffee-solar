@@ -8,6 +8,7 @@
 import fs from "fs";
 import path from "path";
 import { LIVE_DIR } from "@/lib/live";
+import { stateName, stateKind, alarmName } from "@/lib/invcodes";
 
 export const DC_KWP = 21170;
 const GAMMA = -0.0035;                 // module power temperature coefficient per °C (typical crystalline; confirm datasheet)
@@ -33,6 +34,11 @@ const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m %
 export function plantDay(date) {
   const ymd = date.replace(/-/g, "");
   const w = read("iv1", ymd), p = read("iv2", ymd), g = read("grid", ymd), iv = read("inv", ymd);
+  const invNames = iv ? iv.header.filter((h) => /\.alarm_code$/.test(h)).map((h) => h.replace(".alarm_code", "")) : [];
+  const ixA = Object.fromEntries(invNames.map((n) => [n, [iv.ix(`${n}.alarm_code`), iv.ix(`${n}.work_state_01`), iv.ix(`${n}.array_R_iso`), iv.ix(`${n}.internal_temperature`)]]));
+  const alarmRuns = {};                                     // inv -> [{code, from, to}]
+  const lastInv = {}, isoMin = {}, tempMax = {};
+  const faultMins = [];                                     // [G0] per inverter-minute stopped by a fault/alarm in daylight
   const dcCols = iv ? iv.header.map((h, i) => [h, i]).filter(([h]) => /\.dc_power_total$/.test(h)).map(([, i]) => i) : [];
   const gP = g ? ["P01 - MVSTS 1..2", "P04 - MVSTS 3..5"].map((k) => g.ix(`${k}.Active power`)) : [];
   const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, export_kwh: 0, inverter_kwh: 0, irradiation_wh_m2: 0, dc_kwh: 0, n_export: 0, n_dc: 0 }));
@@ -113,6 +119,22 @@ export function plantDay(date) {
           if (ex.every((x) => x !== null)) { expWithDc += Math.max(0, ex[0] + ex[1]) / 60; dcWithExp += dc / 60; }
         }
       }
+      // inverter states and alarms (inverter file)
+      if (ir) {
+        for (const n of invNames) {
+          const [ia, is, ii, it] = ixA[n];
+          const code = num(ir[ia]), st = num(ir[is]), iso = num(ir[ii]), tp = num(ir[it]);
+          if (st !== null || code !== null) lastInv[n] = { time: t, state: st, alarm: code };
+          const kwN = num(pr[p.ix(`${n}.active_power_total`)]);
+          if (iso !== null && kwN !== null && kwN > 20) isoMin[n] = isoMin[n] === undefined ? iso : Math.min(isoMin[n], iso);
+          if (tp !== null) tempMax[n] = tempMax[n] === undefined ? tp : Math.max(tempMax[n], tp);
+          if (code) {
+            const runs = (alarmRuns[n] ||= []); const lr = runs[runs.length - 1];
+            if (lr && lr.code === code && m - lr.to <= 2) lr.to = m; else runs.push({ code, from: m, to: m });
+          }
+          if (G0 !== null && G0 > LIGHT && (code || stateKind(st) === "bad") && (kwN === null || kwN <= 1)) faultMins.push(G0);
+        }
+      }
       // ratio of actual output to irradiance, for the curtailment estimate (unlimited minutes only)
       const set0 = num(pr[iSet]);
       const limited = set0 !== null && set0 > 0 && tot >= 0.97 * set0 * 1000;
@@ -182,6 +204,22 @@ export function plantDay(date) {
   // typical output per unit irradiance (median of unlimited sunny minutes), minus what it made
   const k = ratio.length >= 30 ? ratio.slice().sort((a, b) => a - b)[Math.floor(ratio.length / 2)] : null;
   const curtKwh = k === null ? null : limitMins.reduce((sum, [G0, tot]) => sum + Math.max(0, (G0 / 1000) * DC_KWP * k - tot) / 60, 0);
+  // alarms grouped by code: how many inverters, first start, last end, total inverter-minutes
+  const byCode = {};
+  for (const [n, runs] of Object.entries(alarmRuns)) for (const r0 of runs) {
+    const b = (byCode[r0.code] ||= { code: r0.code, name: alarmName(r0.code), inverters: new Set(), from: r0.from, to: r0.to, minutes: 0 });
+    b.inverters.add(n); b.from = Math.min(b.from, r0.from); b.to = Math.max(b.to, r0.to); b.minutes += r0.to - r0.from + 1;
+  }
+  const alarms = Object.values(byCode).map((b) => ({ ...b, inverters: [...b.inverters].sort(), from: hhmm(b.from), to: hhmm(b.to) })).sort((a, b) => b.minutes - a.minutes);
+  for (const a of alarms) events.push({ time: a.from, kind: "inverter alarm", what: `${a.name} (code ${a.code}) on ${a.inverters.length} inverter${a.inverters.length > 1 ? "s" : ""}, ${a.from}–${a.to}` });
+  events.sort((a, b) => a.time.localeCompare(b.time));
+  const perInvKwp = DC_KWP / Math.max(1, invNames.length || 52);
+  const faultLostKwh = k === null || !faultMins.length ? null : faultMins.reduce((sum, G0) => sum + ((G0 / 1000) * perInvKwp * k) / 60, 0);
+  const inverters = Object.fromEntries(invNames.map((n) => [n, {
+    state: stateName(lastInv[n]?.state), kind: stateKind(lastInv[n]?.state), alarm: lastInv[n]?.alarm || 0,
+    alarm_name: lastInv[n]?.alarm ? alarmName(lastInv[n].alarm) : "", time: lastInv[n]?.time || null,
+    iso_min_kohm: isoMin[n] ?? null, temp_max_c: tempMax[n] ?? null, alarm_minutes: (alarmRuns[n] || []).reduce((a, r0) => a + r0.to - r0.from + 1, 0),
+  }]));
   const wd = sinW.length ? ((Math.atan2(mean(sinW), mean(cosW)) * 180) / Math.PI + 360) % 360 : null;
 
   return {
@@ -190,6 +228,9 @@ export function plantDay(date) {
     pr_pct: r(pr, 1), pr_temp_corr_pct: r(prT, 1), tmod_weighted_c: r(tEff, 1), tmod_max_c: r(tmodMax, 1),
     availability_pct: availAll ? r((availOk / availAll) * 100, 1) : null,
     minutes_at_limit: limitMin,
+    alarms, inverters: invNames.length ? inverters : null,
+    fault_lost_mwh_est: faultLostKwh === null ? null : r(faultLostKwh / 1000, 2),
+    alarm_inverter_minutes: alarms.reduce((a, b) => a + b.minutes, 0),
     curtailed_mwh_est: curtKwh === null ? null : r(curtKwh / 1000, 2),
     inverter_eff_pct: dcE > 100 ? r((acWithDc / dcE) * 100, 1) : null,
     plant_eff_pct: dcWithExp > 100 ? r((expWithDc / dcWithExp) * 100, 1) : null,

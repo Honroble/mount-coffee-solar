@@ -129,7 +129,7 @@ export function gridReport() {
 }
 
 const COLS = ["date", "export_mwh", "inverter_mwh", "j07_mwh", "irradiation_kwh_m2", "pr_pct", "pr_temp_corr_pct", "availability_pct",
-  "minutes_at_limit", "curtailed_mwh_est", "dc_mwh", "inverter_eff_pct", "plant_eff_pct", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
+  "minutes_at_limit", "curtailed_mwh_est", "fault_lost_mwh_est", "alarm_inverter_minutes", "dc_mwh", "inverter_eff_pct", "plant_eff_pct", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
   "specific_yield", "p07_ratio", "f_min", "f_max", "v_min_kv", "v_max_kv", "trips", "breaker_open_min", "coverage_pct", "partial"];
 export function gridCsv() {
   const rows = gridDays().slice().reverse();
