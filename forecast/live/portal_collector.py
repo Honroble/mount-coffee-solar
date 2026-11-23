@@ -353,7 +353,11 @@ def main():
             log_lines.append(f"{group}: +{n} rows" + (f", {len(missing)} channels missing" if missing else ""))
         for (fname, group), chans in load_extra().items():
             try:
-                text = p.download(group, chans, beg, now)
+                # each extra file catches up from its own last saved minute, so a failed run leaves no gap
+                own = last_stamp(os.path.join(cfg["live_dir"], f"{fname}_live_{now:%Y%m%d}.csv")) or \
+                    last_stamp(os.path.join(cfg["live_dir"], f"{fname}_live_{(now - timedelta(days=1)):%Y%m%d}.csv"))
+                fbeg = min(beg, max(own, now - timedelta(hours=12))) if own else beg
+                text = p.download(group, chans, fbeg, now)
                 header, body = parse_csv(text)
                 u = units_of(text)
                 rows = [{"local_channel": c, "unit": u.get(c, "")} for c in chans]

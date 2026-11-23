@@ -6,12 +6,13 @@ import fs from "fs";
 import path from "path";
 import { LIVE_DIR } from "@/lib/live";
 import reportDaily from "@/data/history/report_daily.json";
+import { plantDay } from "@/lib/plantreport";
 
 const K7 = "P07 (OUTGOING FEEDER )", K1 = "P01 - MVSTS 1..2", K4 = "P04 - MVSTS 3..5";
 const AC_MW = 17.79, DC_KWP = 21170;
 const DAY_FROM = 6.5 * 60, DAY_TO = 18 * 60;             // daylight window used for data coverage, GMT minutes
 const j07 = Object.fromEntries((reportDaily || []).map((r) => [r.date, r.export_mwh]));
-const cache = new Map();                                   // file -> { mtimeMs, day }
+const cache = new Map();                                   // date -> { stamp, day }
 
 const num = (v) => { const x = Number(v); return v === "" || v === undefined || !Number.isFinite(x) ? null : x; };
 const r = (x, d = 2) => (x === null || x === undefined || !Number.isFinite(x) ? null : Number(x.toFixed(d)));
@@ -76,19 +77,25 @@ function parseDay(file, date, nowMin = null) {
 }
 
 export function gridDays() {
-  let files = [];
-  try { files = fs.readdirSync(LIVE_DIR).filter((f) => /^grid_live_\d{8}\.csv$/.test(f)).sort(); } catch { return []; }
+  let dates = [];
+  try {
+    dates = [...new Set(fs.readdirSync(LIVE_DIR).map((f) => (f.match(/^(?:grid|iv1|iv2)_live_(\d{8})\.csv$/) || [])[1]).filter(Boolean))].sort();
+  } catch { return []; }
   const now = new Date(), today = now.toISOString().slice(0, 10);
   const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
   const days = [];
-  for (const f of files) {
-    const full = path.join(LIVE_DIR, f);
-    const d = f.slice(10, 18), date = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
-    let st; try { st = fs.statSync(full); } catch { continue; }
-    const hit = cache.get(full);
-    let day = hit && hit.mtimeMs === st.mtimeMs && date !== today ? hit.day : null;
-    if (!day) { try { day = parseDay(full, date, date === today ? nowMin : null); } catch { day = null; } cache.set(full, { mtimeMs: st.mtimeMs, day }); }
-    if (day) days.push({ ...day, partial: date === today });
+  for (const d of dates) {
+    const date = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+    const stamp = ["grid", "iv1", "iv2"].map((k) => { try { return fs.statSync(path.join(LIVE_DIR, `${k}_live_${d}.csv`)).mtimeMs; } catch { return 0; } }).join("|");
+    const hit = cache.get(date);
+    if (hit && hit.stamp === stamp && date !== today) { if (hit.day) days.push(hit.day); continue; }
+    let grid = null, plant = null;
+    const gf = path.join(LIVE_DIR, `grid_live_${d}.csv`);
+    if (fs.existsSync(gf)) { try { grid = parseDay(gf, date, date === today ? nowMin : null); } catch { grid = null; } }
+    try { plant = plantDay(date); } catch { plant = null; }
+    const day = grid || plant ? { date, ...(grid || { export_mwh: null, trips: 0, coverage_pct: null, p07_ratio: null }), ...(plant || {}), partial: date === today } : null;
+    cache.set(date, { stamp, day });
+    if (day) days.push(day);
   }
   return days.reverse();                                   // newest first
 }
@@ -99,10 +106,10 @@ export function gridReport() {
   for (const d of days) {
     const k = d.date.slice(0, 7);
     const m = (months[k] ||= { month: k, days: 0, export_mwh: 0, peak_mw: 0, trips: 0, low_coverage_days: 0 });
-    m.days++; m.export_mwh += d.export_mwh || 0; m.peak_mw = Math.max(m.peak_mw, d.peak_mw || 0); m.trips += d.trips;
-    if (!d.partial && d.coverage_pct < 95) m.low_coverage_days++;
+    m.days++; m.export_mwh += d.export_mwh || 0; m.inverter_mwh = (m.inverter_mwh || 0) + (d.inverter_mwh || 0); m.irr = (m.irr || 0) + (d.irradiation_kwh_m2 || 0); m.peak_mw = Math.max(m.peak_mw, d.peak_mw || 0); m.trips += d.trips || 0;
+    if (!d.partial && d.coverage_pct !== null && d.coverage_pct < 95) m.low_coverage_days++;
   }
-  const full = days.filter((d) => !d.partial && d.coverage_pct >= 95 && d.p07_ratio !== null);
+  const full = days.filter((d) => !d.partial && d.coverage_pct !== null && d.coverage_pct >= 95 && d.p07_ratio !== null);
   const last = full[0];
   const p07 = !last ? { state: "unknown", text: "Not enough full days yet to compare P07 with P01 + P04." }
     : Math.abs(last.p07_ratio - 1) <= 0.03
@@ -111,11 +118,12 @@ export function gridReport() {
   return {
     source: "P01 + P04 (station feeders)",
     note: "Export from the station feeders includes the small 22 kV busbar and cable losses up to P07 (probably under 1 %). Night-time import reads zero on these relays, so auxiliary consumption is not measured here. J07's meter remains the reference for official figures.",
-    p07, days, months: Object.values(months).map((m) => ({ ...m, export_mwh: r(m.export_mwh, 1) })).sort((a, b) => b.month.localeCompare(a.month)),
+    p07, days, months: Object.values(months).map((m) => ({ ...m, export_mwh: r(m.export_mwh, 1), inverter_mwh: r(m.inverter_mwh, 1), irradiation_kwh_m2: r(m.irr, 1), pr_pct: m.irr > 0 ? r((m.inverter_mwh * 1000 / (m.irr * 21170)) * 100, 1) : null })).sort((a, b) => b.month.localeCompare(a.month)),
   };
 }
 
-const COLS = ["date", "export_mwh", "j07_mwh", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
+const COLS = ["date", "export_mwh", "inverter_mwh", "j07_mwh", "irradiation_kwh_m2", "pr_pct", "pr_temp_corr_pct", "availability_pct",
+  "minutes_at_limit", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
   "specific_yield", "p07_ratio", "f_min", "f_max", "v_min_kv", "v_max_kv", "trips", "breaker_open_min", "coverage_pct", "partial"];
 export function gridCsv() {
   const rows = gridDays().slice().reverse();

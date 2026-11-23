@@ -25,7 +25,8 @@ export default function GridStrings() {
           const by = Object.fromEntries((g.feeders || []).map((x) => [x.key.slice(0, 3), x]));
           if (!by.P01 || !by.P04 || by.P01.p_kw === null || by.P04.p_kw === null) return null;
           const exp = by.P01.p_kw + by.P04.p_kw, p7 = by.P07?.p_kw;
-          return <div className="sub" style={{ margin: "6px 0" }}><b>Export now (P01 + P04): {(exp / 1000).toFixed(2)} MW</b>
+          const q = (by.P01.q_kvar || 0) + (by.P04.q_kvar || 0), sva = Math.hypot(exp, q);
+          return <div className="sub" style={{ margin: "6px 0" }}><b>Export now (P01 + P04): {(exp / 1000).toFixed(2)} MW · {(q / 1000).toFixed(2)} Mvar · {(sva / 1000).toFixed(2)} MVA · PF {sva > 0 ? (exp / sva).toFixed(3) : "—"}</b>
             {p7 !== null && p7 !== undefined && exp > 1000 ? ` · P07 reads ${Math.round((Math.abs(p7) / exp) * 100)} % of that (under-reading; VBC/VCA voltage inputs at fault)` : ""}</div>;
         })()}
         {g.missing || !g.feeders?.length ? <div className="empty">No feeder readings yet.</div> : (
