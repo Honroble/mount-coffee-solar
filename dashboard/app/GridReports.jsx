@@ -42,6 +42,8 @@ export default function GridReports() {
           <Kpi label="Performance ratio" value={f(today.pr_pct, 1)} unit="%" note={`temperature-corrected ${f(today.pr_temp_corr_pct, 1)} % · module ${f(today.tmod_weighted_c, 1)} °C`} />
           <Kpi label="Inverter availability" value={f(today.availability_pct, 1)} unit="%" note={`${(today.events || []).filter((e) => e.kind === "inverter outage").length} inverter outages today`} />
           <Kpi label="Irradiation" value={f(today.irradiation_kwh_m2, 2)} unit="kWh/m²" note={`${today.minutes_at_limit ?? "—"} min at the export limit`} />
+          <Kpi label="Export setpoint" value={f(g.control?.setpoint_mw ?? today.setpoint_mw, 2)} unit="MW"
+            note={`power limit ${g.control?.power_limit_pct ?? "—"} % · ${(today.events || []).filter((e) => e.kind === "setpoint change").length} changes today`} />
           <Kpi small label="Grid frequency" value={`${f(today.f_min, 2)}–${f(today.f_max, 2)}`} unit="Hz" note="day range at P07" />
           <Kpi small label="Grid voltage (VAB)" value={`${f(today.v_min_kv, 1)}–${f(today.v_max_kv, 1)}`} unit="kV" note={`${today.trips} trips · breakers open ${today.breaker_open_min} min in daylight`} />
         </div>
@@ -54,7 +56,7 @@ export default function GridReports() {
         <div className="sub">{g.note} Days with under 95 % of daylight minutes recorded (PC off) are marked and read low. PR = inverter energy ÷ (irradiation × 21.17 MWp), using the up-facing pyranometers as the plane-of-array reference (confirm their tilt on site); temperature-corrected PR uses −0.35 %/°C from 25 °C.</div>
         <div className="scroll" style={{ marginTop: 8, maxHeight: "none" }}>
           <table>
-            <thead><tr><th>Date</th><th className="num">Export (MWh)</th><th className="num">J07 report (MWh)</th><th className="num">Inverters (MWh)</th><th className="num">Irr. (kWh/m²)</th><th className="num">PR (%)</th><th className="num">PR temp-corr. (%)</th><th className="num">Avail. (%)</th><th className="num">Peak (MW)</th>
+            <thead><tr><th>Date</th><th className="num">Export (MWh)</th><th className="num">J07 report (MWh)</th><th className="num">Inverters (MWh)</th><th className="num">Irr. (kWh/m²)</th><th className="num">PR (%)</th><th className="num">PR temp-corr. (%)</th><th className="num">Avail. (%)</th><th className="num">Setpoint (MW)</th><th className="num">At limit (min)</th><th className="num">Peak (MW)</th>
               <th className="num">CF (%)</th><th className="num">Yield (kWh/kWp)</th><th className="num">Op. hours</th><th className="num">Q (Mvarh)</th>
               <th className="num">P07 ÷ P01+P04</th><th className="num">f range (Hz)</th><th className="num">Trips</th><th className="num">Data (%)</th></tr></thead>
             <tbody>
@@ -68,6 +70,8 @@ export default function GridReports() {
                   <td className="num">{f(d.pr_pct, 1)}</td>
                   <td className="num">{f(d.pr_temp_corr_pct, 1)}</td>
                   <td className={`num ${d.availability_pct !== null && d.availability_pct !== undefined && d.availability_pct < 98 ? "warn-text" : ""}`}>{f(d.availability_pct, 1)}</td>
+                  <td className="num">{d.setpoint_min_mw == null ? "—" : d.setpoint_min_mw === d.setpoint_max_mw ? f(d.setpoint_max_mw, 2) : `${f(d.setpoint_min_mw, 2)}–${f(d.setpoint_max_mw, 2)}`}</td>
+                  <td className="num">{d.minutes_at_limit ?? "—"}</td>
                   <td className="num">{f(d.peak_mw, 1)}</td>
                   <td className="num">{f(d.capacity_factor_pct, 1)}</td>
                   <td className="num">{f(d.specific_yield, 2)}</td>
@@ -107,13 +111,13 @@ export default function GridReports() {
         </section>
         <section className="panel">
           <h2>Events</h2>
-          <div className="sub">Breaker changes, trips and faults on P07/P01/P04; grid frequency outside 49.5–50.5 Hz; inverters off for 15+ min while the rest of the plant produced. Last 7 days, newest first.</div>
+          <div className="sub">Breaker changes, trips and faults on P07/P01/P04; changes to the export setpoint; grid frequency outside 49.5–50.5 Hz; inverters off for 15+ min while the rest of the plant produced. Last 7 days, newest first.</div>
           {events.length === 0 ? <div className="empty">No events.</div> : (
             <div className="scroll" style={{ marginTop: 8 }}>
               <table>
                 <thead><tr><th>Date</th><th>Time (GMT)</th><th>Event</th><th>Details</th></tr></thead>
                 <tbody>{events.map((e, i) => (
-                  <tr key={i}><td style={{ whiteSpace: "nowrap" }}>{e.date}</td><td>{e.time}</td><td className={e.kind === "trip" || e.kind === "fault" || e.kind === "breaker open" ? "bad-text" : "warn-text"}>{e.kind}</td><td>{e.what}</td></tr>
+                  <tr key={i}><td style={{ whiteSpace: "nowrap" }}>{e.date}</td><td>{e.time}</td><td className={e.kind === "trip" || e.kind === "fault" || e.kind === "breaker open" ? "bad-text" : e.kind === "setpoint change" ? "" : "warn-text"}>{e.kind}</td><td>{e.what}</td></tr>
                 ))}</tbody>
               </table>
             </div>

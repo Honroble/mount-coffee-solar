@@ -115,7 +115,13 @@ export function gridReport() {
     : Math.abs(last.p07_ratio - 1) <= 0.03
       ? { state: "fixed", ratio: last.p07_ratio, date: last.date, text: `P07 agreed with P01 + P04 within 3 % on ${last.date}: the repair looks done. Confirm before switching export back to P07.` }
       : { state: "faulty", ratio: last.p07_ratio, date: last.date, text: `P07 read ${Math.round(last.p07_ratio * 100)} % of P01 + P04 on ${last.date}, so export is taken from P01 + P04.` };
+  let control = null;
+  try {
+    const w = JSON.parse(fs.readFileSync(path.join(LIVE_DIR, "widget_now.json"), "utf8"));
+    control = { time: w.time_utc, setpoint_mw: w.power_setpoint_mw ?? null, power_limit_pct: w.power_limit_user_pct ?? null };
+  } catch { /* not yet */ }
   return {
+    control,
     source: "P01 + P04 (station feeders)",
     note: "Export from the station feeders includes the small 22 kV busbar and cable losses up to P07 (probably under 1 %). Night-time import reads zero on these relays, so auxiliary consumption is not measured here. J07's meter remains the reference for official figures.",
     p07, days, months: Object.values(months).map((m) => ({ ...m, export_mwh: r(m.export_mwh, 1), inverter_mwh: r(m.inverter_mwh, 1), irradiation_kwh_m2: r(m.irr, 1), pr_pct: m.irr > 0 ? r((m.inverter_mwh * 1000 / (m.irr * 21170)) * 100, 1) : null })).sort((a, b) => b.month.localeCompare(a.month)),
@@ -123,7 +129,7 @@ export function gridReport() {
 }
 
 const COLS = ["date", "export_mwh", "inverter_mwh", "j07_mwh", "irradiation_kwh_m2", "pr_pct", "pr_temp_corr_pct", "availability_pct",
-  "minutes_at_limit", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
+  "minutes_at_limit", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
   "specific_yield", "p07_ratio", "f_min", "f_max", "v_min_kv", "v_max_kv", "trips", "breaker_open_min", "coverage_pct", "partial"];
 export function gridCsv() {
   const rows = gridDays().slice().reverse();

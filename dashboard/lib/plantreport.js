@@ -50,7 +50,7 @@ export function plantDay(date) {
   const up1 = [], up2 = [], soil = [], rh = [], pa = [], ws = [], tamb = [], sinW = [], cosW = [];
   const sts = {}, invE1 = {};
   const outage = {}, events = [];
-  let tmodMax = null;
+  let tmodMax = null, spLast = null, spMin = null, spMax = null;
 
   // grid state for events
   const G = g && ["P07 (OUTGOING FEEDER )", "P01 - MVSTS 1..2", "P04 - MVSTS 3..5"].map((k) => ({
@@ -96,6 +96,10 @@ export function plantDay(date) {
       }
       invE += tot / 60;
       const set = num(pr[iSet]);                            // export setpoint, MW
+      if (set !== null) {
+        if (spLast !== null && Math.abs(set - spLast) >= 0.01) events.push({ time: t, kind: "setpoint change", what: `export setpoint ${spLast.toFixed(2)} → ${set.toFixed(2)} MW` });
+        spLast = set; spMin = spMin === null ? set : Math.min(spMin, set); spMax = spMax === null ? set : Math.max(spMax, set);
+      }
       if (set !== null && set > 0 && tot >= 0.97 * set * 1000) limitMin++;
     }
     // grid events
@@ -158,6 +162,7 @@ export function plantDay(date) {
     pr_pct: r(pr, 1), pr_temp_corr_pct: r(prT, 1), tmod_weighted_c: r(tEff, 1), tmod_max_c: r(tmodMax, 1),
     availability_pct: availAll ? r((availOk / availAll) * 100, 1) : null,
     minutes_at_limit: limitMin,
+    setpoint_mw: r(spLast, 2), setpoint_min_mw: r(spMin, 2), setpoint_max_mw: r(spMax, 2),
     tamb_mean_c: r(mean(tamb), 1), rh_mean_pct: r(mean(rh), 0), pressure_hpa: r(mean(pa), 1),
     wind_mean_ms: r(mean(ws) === null ? null : mean(ws) / 3.6, 1), wind_max_ms: r(wmax, 1), wind_dir_deg: r(wd, 0),
     rain_mm: r(rain, 1), soiling_pct: soil.length ? r(mean(soil), 1) : null,
