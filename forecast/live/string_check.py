@@ -46,6 +46,21 @@ def fnum(s):
         return None
 
 
+def retry(what, fn, tries=3, wait=20):
+    """Run fn(); on a network error wait and try again, then stop with a one-line message instead of a traceback."""
+    import time
+    for n in range(1, tries + 1):
+        try:
+            return fn()
+        except Exception as e:  # requests/urllib3/ssl errors
+            if n == tries:
+                print(f"String check stopped: could not reach the portal while {what} ({type(e).__name__}: {str(e)[:160]}).")
+                print("Check the PC's internet connection (try opening ras.gantner-webportal.com in a browser) and run it again.")
+                sys.exit(2)
+            print(f"  network error while {what} ({type(e).__name__}); retrying in {wait} s ({n}/{tries})")
+            time.sleep(wait)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -58,14 +73,14 @@ def main():
     beg = datetime.strptime(f"{day:%Y-%m-%d} {a.from_time}", "%Y-%m-%d %H:%M")
     end = datetime.strptime(f"{day:%Y-%m-%d} {a.to_time}", "%Y-%m-%d %H:%M")
     p = Portal(cfg)
-    p.ensure()
+    retry("signing in", p.ensure)
     invs = inverters()
     result = {"date": f"{day:%Y-%m-%d}", "window_gmt": f"{a.from_time}-{a.to_time}", "inverters": {}}
     for sts in sorted({i.split(".")[0] for i in invs}):
         group = [i for i in invs if i.startswith(sts + ".")]
         chans = [f"{i}.active_power_total" for i in group] + \
                 [f"{i}.dc_current_string_{k:02d}" for i in group for k in range(1, N_STRINGS + 1)]
-        header, body = parse_csv(p.download("iv2", chans, beg, end))
+        header, body = parse_csv(retry(f"downloading {sts}", lambda: p.download("iv2", chans, beg, end)))
         idx = {h: n for n, h in enumerate(header)}
         for inv in group:
             ip = idx.get(f"{inv}.active_power_total")
