@@ -20,7 +20,14 @@ export default function GridStrings() {
     <>
       <section className="panel">
         <h2>22 kV feeders</h2>
-        <div className="sub">Protection relays as reported to the logger, every minute{g.time ? ` · last reading ${g.time.slice(11, 16)} GMT` : ""}. Breaker state, trips and faults are reliable; P07 power, voltages and energy are still being verified at site (see the findings report of 22 Nov), so treat those figures with care.</div>
+        <div className="sub">Protection relays as reported to the logger, every minute{g.time ? ` · last reading ${g.time.slice(11, 16)} GMT` : ""}. Breaker state, trips and faults are reliable; P07 active power and energy read about 34 % low (VBC and VCA voltage inputs read ~12.7 kV), so export is taken from P01 + P04 until it is repaired.</div>
+        {(() => {
+          const by = Object.fromEntries((g.feeders || []).map((x) => [x.key.slice(0, 3), x]));
+          if (!by.P01 || !by.P04 || by.P01.p_kw === null || by.P04.p_kw === null) return null;
+          const exp = by.P01.p_kw + by.P04.p_kw, p7 = by.P07?.p_kw;
+          return <div className="sub" style={{ margin: "6px 0" }}><b>Export now (P01 + P04): {(exp / 1000).toFixed(2)} MW</b>
+            {p7 !== null && p7 !== undefined && exp > 1000 ? ` · P07 reads ${Math.round((Math.abs(p7) / exp) * 100)} % of that (under-reading; VBC/VCA voltage inputs at fault)` : ""}</div>;
+        })()}
         {g.missing || !g.feeders?.length ? <div className="empty">No feeder readings yet.</div> : (
           <div className="scroll" style={{ marginTop: 8, maxHeight: "none" }}>
             <table>
