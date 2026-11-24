@@ -382,6 +382,14 @@ def main():
                                timeout=900, capture_output=True)
             except Exception:
                 pass
+    # plant and station trips (trip_log.py): logged to trips.csv, the Trips tab and the Alerts tab, every run
+    try:
+        import subprocess
+        subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "trip_log.py"), "--config", a.config]
+                       + ([] if os.path.exists(os.path.join(live, "trips.csv")) else ["--all"]),
+                       timeout=240, capture_output=True)
+    except Exception:
+        pass
     # nightly backup of the data files to Google Drive (backup_drive.py): first run after midnight GMT
     blog = os.path.join(live, "backup_log.txt")
     last_backup = datetime.fromtimestamp(os.path.getmtime(blog), timezone.utc).date() if os.path.exists(blog) else None

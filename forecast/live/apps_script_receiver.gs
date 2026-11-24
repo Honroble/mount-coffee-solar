@@ -15,7 +15,7 @@ const TOKEN = 'CHANGE-ME-to-the-same-secret-as-config.json';
 const SHEET = 'Forecasts';
 const SPREADSHEET_ID = 'PASTE-THE-SPREADSHEET-ID';
 const COLUMNS = 12;
-const REPLACEABLE = ['WeatherHourly', 'WeatherDays', 'WeatherAlerts', 'DailyEnergy', 'Verification', 'VerificationLedger'];
+const REPLACEABLE = ['WeatherHourly', 'WeatherDays', 'WeatherAlerts', 'DailyEnergy', 'Verification', 'VerificationLedger', 'Trips'];
 
 function doPost(e) {
   try {
