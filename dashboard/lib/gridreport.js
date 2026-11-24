@@ -106,7 +106,7 @@ export function gridReport() {
   for (const d of days) {
     const k = d.date.slice(0, 7);
     const m = (months[k] ||= { month: k, days: 0, export_mwh: 0, peak_mw: 0, trips: 0, low_coverage_days: 0 });
-    m.days++; m.export_mwh += d.export_mwh || 0; m.inverter_mwh = (m.inverter_mwh || 0) + (d.inverter_mwh || 0); m.irr = (m.irr || 0) + (d.irradiation_kwh_m2 || 0); m.peak_mw = Math.max(m.peak_mw, d.peak_mw || 0); m.trips += d.trips || 0;
+    m.days++; for (const kk of ["trip_lost_mwh_est", "fault_lost_mwh_est", "string_lost_mwh_est", "curtailed_mwh_est"]) m[kk] = (m[kk] || 0) + (d[kk] || 0); m.export_mwh += d.export_mwh || 0; m.inverter_mwh = (m.inverter_mwh || 0) + (d.inverter_mwh || 0); m.irr = (m.irr || 0) + (d.irradiation_kwh_m2 || 0); m.peak_mw = Math.max(m.peak_mw, d.peak_mw || 0); m.trips += d.trips || 0;
     if (!d.partial && d.coverage_pct !== null && d.coverage_pct < 95) m.low_coverage_days++;
   }
   const full = days.filter((d) => !d.partial && d.coverage_pct !== null && d.coverage_pct >= 95 && d.p07_ratio !== null);
@@ -137,7 +137,7 @@ export function gridReport() {
 }
 
 const COLS = ["date", "export_mwh", "inverter_mwh", "j07_mwh", "irradiation_kwh_m2", "pr_pct", "pr_temp_corr_pct", "availability_pct",
-  "minutes_at_limit", "curtailed_mwh_est", "fault_lost_mwh_est", "alarm_inverter_minutes", "dc_mwh", "inverter_eff_pct", "plant_eff_pct", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
+  "minutes_at_limit", "curtailed_mwh_est", "trip_lost_mwh_est", "fault_lost_mwh_est", "string_lost_mwh_est", "dead_strings", "alarm_inverter_minutes", "dc_mwh", "inverter_eff_pct", "plant_eff_pct", "setpoint_min_mw", "setpoint_max_mw", "tmod_weighted_c", "tamb_mean_c", "rh_mean_pct", "pressure_hpa", "wind_mean_ms", "wind_max_ms", "rain_mm", "soiling_pct", "import_mwh", "reactive_mvarh", "peak_mw", "peak_at", "operating_h", "capacity_factor_pct",
   "specific_yield", "p07_ratio", "f_min", "f_max", "v_min_kv", "v_max_kv", "trips", "breaker_open_min", "coverage_pct", "partial"];
 export function gridCsv() {
   const rows = gridDays().slice().reverse();

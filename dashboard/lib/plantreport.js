@@ -39,6 +39,18 @@ export function plantDay(date) {
   const alarmRuns = {};                                     // inv -> [{code, from, to}]
   const lastInv = {}, isoMin = {}, tempMax = {};
   const faultMins = [];                                     // [G0] per inverter-minute stopped by a fault/alarm in daylight
+  const tripMins = [];                                      // [G0] per inverter-minute off during a logged plant/station trip
+  const tripWin = [];                                       // [scope, from, to] minutes, from trips.csv
+  try {
+    const tl = fs.readFileSync(path.join(LIVE_DIR, "trips.csv"), "utf8").trim().split(/\r?\n/).slice(1);
+    for (const l of tl) {
+      const c = l.split(",");
+      if (c[0] !== date) continue;
+      const mm = (x) => (x ? Number(x.slice(11, 13)) * 60 + Number(x.slice(14, 16)) : 1440);
+      tripWin.push([c[4], mm(c[1]), mm(c[2])]);
+    }
+  } catch { /* no trips file */ }
+  const inTrip = (n, m) => tripWin.some(([sc, a, b]) => m >= a && m < b && (sc === "plant" || n.startsWith(sc + ".")));
   const dcCols = iv ? iv.header.map((h, i) => [h, i]).filter(([h]) => /\.dc_power_total$/.test(h)).map(([, i]) => i) : [];
   const gP = g ? ["P01 - MVSTS 1..2", "P04 - MVSTS 3..5"].map((k) => g.ix(`${k}.Active power`)) : [];
   const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, export_kwh: 0, inverter_kwh: 0, irradiation_wh_m2: 0, dc_kwh: 0, n_export: 0, n_dc: 0 }));
@@ -132,7 +144,10 @@ export function plantDay(date) {
             const runs = (alarmRuns[n] ||= []); const lr = runs[runs.length - 1];
             if (lr && lr.code === code && m - lr.to <= 2) lr.to = m; else runs.push({ code, from: m, to: m });
           }
-          if (G0 !== null && G0 > LIGHT && (code || stateKind(st) === "bad") && (kwN === null || kwN <= 1)) faultMins.push(G0);
+          if (G0 !== null && G0 > LIGHT && (kwN === null || kwN <= 1)) {
+            if (inTrip(n, m)) tripMins.push(G0);
+            else if (code || stateKind(st) === "bad") faultMins.push(G0);
+          }
         }
       }
       // ratio of actual output to irradiance, for the curtailment estimate (unlimited minutes only)
@@ -214,7 +229,24 @@ export function plantDay(date) {
   for (const a of alarms) events.push({ time: a.from, kind: "inverter alarm", what: `${a.name} (code ${a.code}) on ${a.inverters.length} inverter${a.inverters.length > 1 ? "s" : ""}, ${a.from}–${a.to}` });
   events.sort((a, b) => a.time.localeCompare(b.time));
   const perInvKwp = DC_KWP / Math.max(1, invNames.length || 52);
-  const faultLostKwh = k === null || !faultMins.length ? null : faultMins.reduce((sum, G0) => sum + ((G0 / 1000) * perInvKwp * k) / 60, 0);
+  const lostOf = (arr) => (k === null ? null : arr.reduce((sum, G0) => sum + ((G0 / 1000) * perInvKwp * k) / 60, 0));
+  const faultLostKwh = !invNames.length ? null : !faultMins.length ? (k === null ? null : 0) : lostOf(faultMins);
+  const tripLostKwh = !invNames.length ? null : !tripMins.length ? (k === null ? null : 0) : lostOf(tripMins);
+  // dead DC strings: each dead string would have made the inverter's energy per working string (string check of that
+  // day if there is one, else the latest check). Counted as a loss only if they are faults, not unused by design.
+  let stringLostKwh = null, deadStrings = 0;
+  try {
+    const f1 = path.join(LIVE_DIR, `string_check_${ymd}.json`), f2 = path.join(LIVE_DIR, "string_check_latest.json");
+    const sc = JSON.parse(fs.readFileSync(fs.existsSync(f1) ? f1 : f2, "utf8"));
+    if (fs.existsSync(f1) || (sc.date || "") <= date) {
+      stringLostKwh = 0;
+      for (const [n, v] of Object.entries(sc.inverters || {})) {
+        const d = (v.dead || []).length, used = v.used_strings || 0;
+        if (!d || used <= d || !invE1[n]) continue;
+        deadStrings += d; stringLostKwh += (d * invE1[n]) / (used - d);
+      }
+    }
+  } catch { /* no string check */ }
   const inverters = Object.fromEntries(invNames.map((n) => [n, {
     state: stateName(lastInv[n]?.state), kind: stateKind(lastInv[n]?.state), alarm: lastInv[n]?.alarm || 0,
     alarm_name: lastInv[n]?.alarm ? alarmName(lastInv[n].alarm) : "", time: lastInv[n]?.time || null,
@@ -230,6 +262,8 @@ export function plantDay(date) {
     minutes_at_limit: limitMin,
     alarms, inverters: invNames.length ? inverters : null,
     fault_lost_mwh_est: faultLostKwh === null ? null : r(faultLostKwh / 1000, 2),
+    trip_lost_mwh_est: tripLostKwh === null ? null : r(tripLostKwh / 1000, 2),
+    string_lost_mwh_est: stringLostKwh === null ? null : r(stringLostKwh / 1000, 2), dead_strings: deadStrings,
     alarm_inverter_minutes: alarms.reduce((a, b) => a + b.minutes, 0),
     curtailed_mwh_est: curtKwh === null ? null : r(curtKwh / 1000, 2),
     inverter_eff_pct: dcE > 100 ? r((acWithDc / dcE) * 100, 1) : null,

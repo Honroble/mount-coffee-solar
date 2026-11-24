@@ -2,6 +2,59 @@
 // Grid & reports tab: daily and monthly export from P01 + P04 (P07 under-reads until repaired), KPIs and CSV download.
 import { useEffect, useState } from "react";
 
+const LOSS = [
+  ["trip_lost_mwh_est", "Grid trips", "#f85149"],
+  ["fault_lost_mwh_est", "Inverter alarms and faults (mostly morning insulation)", "#d29922"],
+  ["string_lost_mwh_est", "Dead DC strings (if faults)", "#a371f7"],
+  ["curtailed_mwh_est", "Export limit (curtailment)", "#58a6ff"],
+];
+
+function Losses({ days }) {
+  const sum = (ds) => {
+    const o = { days: ds.length, actual: 0 };
+    for (const d of ds) { o.actual += d.inverter_mwh || 0; for (const [k] of LOSS) o[k] = (o[k] || 0) + (d[k] || 0); }
+    o.lost = LOSS.reduce((a, [k]) => a + (o[k] || 0), 0); o.potential = o.actual + o.lost;
+    return o;
+  };
+  const withInv = days.filter((d) => d.inverter_mwh != null);
+  if (!withInv.length) return null;
+  const month = withInv[0].date.slice(0, 7);
+  const periods = [
+    [withInv[0].partial ? "Today so far" : withInv[0].date, sum([withInv[0]])],
+    ...(withInv[1] ? [[withInv[1].date, sum([withInv[1]])]] : []),
+    ["Last 7 days", sum(withInv.slice(0, 7))],
+    [`${month} so far`, sum(withInv.filter((d) => d.date.startsWith(month)))],
+  ];
+  const pct = (x, t) => (t > 0 ? `${((x / t) * 100).toFixed(1)} %` : "—");
+  const w = (x, t) => (t > 0 ? `${(x / t) * 100}%` : "0%");
+  return (
+    <section className="panel">
+      <h2>Where the energy went</h2>
+      <div className="sub">Energy the inverters produced, and the energy lost to each cause we can measure. All losses are estimates from the plant's own data: inverter-minutes off in daylight valued at that day's output per unit irradiance; dead strings at the inverter's energy per working string (only a loss if they are faults, not unused by design); curtailment from minutes at the export limit. Soiling, temperature, cable and transformer losses are not included.</div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", margin: "8px 0 4px" }}>
+        <span className="sub"><span style={{ display: "inline-block", width: 10, height: 10, background: "#2ea043", borderRadius: 2, marginRight: 4 }} />Produced</span>
+        {LOSS.map(([k, label, c]) => <span key={k} className="sub"><span style={{ display: "inline-block", width: 10, height: 10, background: c, borderRadius: 2, marginRight: 4 }} />{label}</span>)}
+      </div>
+      <table style={{ marginTop: 6 }}>
+        <thead><tr><th>Period</th><th className="num">Produced (MWh)</th>{LOSS.map(([k, label]) => <th key={k} className="num">{label.split(" (")[0]} (MWh)</th>)}<th className="num">Lost total</th><th style={{ width: "28%" }}></th></tr></thead>
+        <tbody>{periods.map(([name, o]) => (
+          <tr key={name}>
+            <td style={{ whiteSpace: "nowrap" }}>{name}{o.days > 1 ? ` (${o.days} d)` : ""}</td>
+            <td className="num">{o.actual.toFixed(1)}</td>
+            {LOSS.map(([k]) => <td key={k} className="num">{(o[k] || 0).toFixed(1)}</td>)}
+            <td className="num" style={{ whiteSpace: "nowrap" }}><b>{o.lost.toFixed(1)}</b> <span style={{ color: "#8b98a8" }}>({pct(o.lost, o.potential)})</span></td>
+            <td><div style={{ display: "flex", height: 12, borderRadius: 3, overflow: "hidden", background: "#2a313c" }}>
+              <div style={{ width: w(o.actual, o.potential), background: "#2ea043" }} title={`Produced ${o.actual.toFixed(1)} MWh`} />
+              {LOSS.map(([k, label, c]) => <div key={k} style={{ width: w(o[k] || 0, o.potential), background: c }} title={`${label}: ${(o[k] || 0).toFixed(2)} MWh`} />)}
+            </div></td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <div className="sub" style={{ marginTop: 6 }}>Days with missing data (PC off) read low in every column. Trip and alarm losses are counted from 23 Nov 2026 (when inverter alarm data began) and dead strings from the first string check, so 7-day and monthly totals understate losses until the history builds up. Daily values are in the CSV download.</div>
+    </section>
+  );
+}
+
 const KIND_BG = { ok: "#1f6f3f", idle: "#3a4656", warn: "#8a6d12", bad: "#8b2b2b", off: "#2a313c" };
 
 function Alarms({ days }) {
@@ -133,6 +186,7 @@ export default function GridReports() {
           <Kpi small label="Grid voltage (VAB)" value={`${f(today.v_min_kv, 1)}–${f(today.v_max_kv, 1)}`} unit="kV" note={`${today.trips} trips · breakers open ${today.breaker_open_min} min in daylight`} />
         </div>
       )}
+      <Losses days={g.days} />
       <section className="panel">
         <div className="panel-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
           <h2>Daily grid report</h2>

@@ -11,7 +11,9 @@ the logger, and command channels are never requested.
   python live\\fill_gaps.py --date 2026-11-23 --files grid inv ctrl
   python live\\fill_gaps.py --date 2026-11-23 --dry-run  # list the gaps, download nothing
   python live\\fill_gaps.py                               # yesterday and today
+  python live\\fill_gaps.py --auto                        # as run by alerts.py: skips spans already tried twice
 """
+import json
 import argparse
 import csv
 import os
@@ -68,11 +70,17 @@ def main():
     ap.add_argument("--date", action="append", help="YYYY-MM-DD (repeatable); default yesterday and today")
     ap.add_argument("--files", nargs="+", default=FILES, choices=FILES)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--auto", action="store_true", help="remember tried spans; give up on a span after 2 tries")
     a = ap.parse_args()
     cfg = load_config(a.config)
     live = cfg["live_dir"]
     today = datetime.utcnow().date()
     days = [datetime.strptime(d, "%Y-%m-%d").date() for d in a.date] if a.date else [today - timedelta(days=1), today]
+    sp = os.path.join(live, "fill_gaps_state.json")
+    try:
+        tried = json.load(open(sp, encoding="utf-8")) if a.auto else {}
+    except Exception:
+        tried = {}
     p = None
     for day in days:
         for prefix in a.files:
@@ -82,6 +90,8 @@ def main():
                 continue
             head, units, body = read_rows(path)
             gaps = find_gaps(day, body)
+            if a.auto:
+                gaps = [g for g in gaps if tried.get(f"{prefix} {g[0]:%Y-%m-%d %H:%M}-{g[1]:%H:%M}", 0) < 2]
             if not gaps:
                 print(f"{prefix} {day}: no gaps")
                 continue
@@ -100,6 +110,8 @@ def main():
             seen = {stamp(r) for r in body}
             added = []
             for g0, g1 in gaps:
+                k = f"{prefix} {g0:%Y-%m-%d %H:%M}-{g1:%H:%M}"
+                tried[k] = tried.get(k, 0) + 1
                 t = g0
                 while t < g1:
                     t2 = min(g1, t + timedelta(hours=CHUNK_H))
@@ -134,6 +146,10 @@ def main():
                 w.writerows(merged)
             os.replace(tmp, path)
             print(f"  added {len(added)} minutes")
+    if a.auto and not a.dry_run:
+        cutoff = (datetime.utcnow() - timedelta(days=10)).strftime("%Y-%m-%d")
+        with open(sp, "w", encoding="utf-8") as fh:
+            json.dump({k: v for k, v in tried.items() if k.split(" ")[1] >= cutoff}, fh)
     if p is not None:
         try:
             p.save()

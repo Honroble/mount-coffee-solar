@@ -407,6 +407,19 @@ def main():
                                timeout=900, capture_output=True)
             except Exception:
                 pass
+    # fill gaps inside yesterday's and today's 1-minute files from the logger (fill_gaps.py), at most once an hour
+    if not a.dry_run and (not state.get("fill_gaps") or now - datetime.fromisoformat(state["fill_gaps"]) > timedelta(minutes=60)):
+        state["fill_gaps"] = now.isoformat()
+        try:
+            import subprocess
+            r = subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "fill_gaps.py"), "--config", a.config, "--auto"],
+                               timeout=900, capture_output=True, text=True)
+            added = [l.strip() for l in (r.stdout or "").splitlines() if "added" in l or "gap(s)" in l]
+            if any("added" in l for l in added):
+                with open(os.path.join(live, "collector_log.txt"), "a", encoding="utf-8") as fh:
+                    fh.write(f"{now:%Y-%m-%d %H:%M} UTC  fill_gaps: " + " | ".join(added)[:400] + "\n")
+        except Exception:
+            pass
     # plant and station trips (trip_log.py): logged to trips.csv, the Trips tab and the Alerts tab, every run
     try:
         import subprocess
