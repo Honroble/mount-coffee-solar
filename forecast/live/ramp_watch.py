@@ -164,6 +164,7 @@ def run(cfg, now=None, send=True, config_path=None):
     res["shown_level"] = held.get("level", "none") if held else "none"
     res["shown_message"] = held.get("message", "") if held else ""
     res["last_mail_utc"] = prev.get("last_mail_utc")
+    res["last_mail_level"] = prev.get("last_mail_level")     # carried forward on every run (was lost when no mail was due)
     if new_event:
         with open(os.path.join(live, "ramp_events.csv"), "a", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
@@ -198,8 +199,6 @@ def run(cfg, now=None, send=True, config_path=None):
                 res["last_mail_result"] = f"could not start sender: {e}"[:120]
             res["last_mail_utc"] = res["time_utc"]
             res["last_mail_level"] = res["level"]
-    else:
-        res["last_mail_level"] = prev.get("last_mail_level")
     tmp = st_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(res, fh)
