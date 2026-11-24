@@ -8,6 +8,7 @@ import ForecastCheck from "./ForecastCheck";
 import RampBanner from "./RampBanner";
 import GridStrings from "./GridStrings";
 import GridReports from "./GridReports";
+import Finance from "./Finance";
 import { lowForecastWarning } from "@/lib/lowForecast";
 import { useEffect, useMemo, useState } from "react";
 import WeatherSection from "./WeatherSection";
@@ -401,7 +402,7 @@ function ViewSwitch({ view, setView }) {
 
 const TABS = [
   ["live", "Live"], ["forecast", "Forecast"], ["performance", "Performance"],
-  ["health", "Plant health"], ["grid", "Grid & reports"], ["history", "History"], ["verification", "Verification"],
+  ["health", "Plant health"], ["grid", "Grid & reports"], ["finance", "Finance"], ["history", "History"], ["verification", "Verification"],
 ];
 
 // Click the first explanation line of a section to show the rest (new layout keeps sections short).
@@ -478,6 +479,7 @@ function NewLayout({ live, s, liveAcc, liveFrom, liveScore, replayDates, initial
         <IrradianceSection live={live} />
       </>}
       {tab === "grid" && <GridReports />}
+      {tab === "finance" && <Finance />}
       {tab === "history" && <>
         <div className="grid kpis">
           <Kpi label="Energy, whole period" value={s.energy_mwh.toLocaleString()} unit="MWh" note={`${s.days} days, ${s.first} to ${s.last}`} />
