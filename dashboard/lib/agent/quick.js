@@ -169,22 +169,68 @@ export async function quickContext() {
   return out.join("\n");
 }
 
-// Weekly review without AI: the numbers only (used when no API key is set)
+// Weekly review without AI: numbers and rule-based checks of the open contractor issues (no API key needed)
 export function quickWeekly() {
   const g = gridReport();
-  const ds = g.days.filter((d) => !d.partial).slice(0, 7);
-  const S = (k) => ds.reduce((a, d) => a + (Number(d[k]) || 0), 0);
-  const prod = S("inverter_mwh"), lost = ["trip_lost_mwh_est", "fault_lost_mwh_est", "string_lost_mwh_est", "curtailed_mwh_est"].reduce((a, k) => a + S(k), 0);
-  const since = ds.length ? ds[ds.length - 1].date : "";
-  const until = ds[0]?.date || "";
+  const full = g.days.filter((d) => !d.partial);
+  const ds = full.slice(0, 7), prev = full.slice(7, 14);
+  if (!ds.length) return "MOUNT COFFEE SOLAR · WEEKLY REVIEW\nNo complete days of data yet.";
+  const S = (arr, k) => arr.reduce((a, d) => a + (Number(d[k]) || 0), 0);
+  const avg = (arr, k) => { const v = arr.map((d) => d[k]).filter((x) => x != null && Number.isFinite(Number(x))); return v.length ? v.reduce((a, x) => a + Number(x), 0) / v.length : null; };
+  const LK = ["trip_lost_mwh_est", "fault_lost_mwh_est", "string_lost_mwh_est", "curtailed_mwh_est"];
+  const lostOf = (arr) => LK.reduce((a, k) => a + S(arr, k), 0);
+  const since = ds[ds.length - 1].date, until = ds[0].date;
+  const prod = S(ds, "inverter_mwh"), lost = lostOf(ds);
+  const f1 = (x) => (x == null ? "n/a" : Number(x).toFixed(1));
+  const out = [`MOUNT COFFEE SOLAR · WEEKLY REVIEW ${since} to ${until} (${ds.length} days)`, ""];
+  out.push("1. WEEK IN NUMBERS");
+  out.push(`Produced ${prod.toFixed(1)} MWh (inverters); export ${S(ds, "export_mwh").toFixed(1)} MWh (P01+P04, days with feeder data).`);
+  out.push(`PR ${f1(avg(ds, "pr_pct"))} %, inverter availability ${f1(avg(ds, "availability_pct"))} %.`);
+  out.push(`Estimated losses ${lost.toFixed(1)} MWh (${prod + lost > 0 ? ((lost / (prod + lost)) * 100).toFixed(1) : "0"} % of potential): grid trips ${S(ds, LK[0]).toFixed(1)}, inverter alarms ${S(ds, LK[1]).toFixed(1)}, dead strings ${S(ds, LK[2]).toFixed(1)}, export limit ${S(ds, LK[3]).toFixed(1)} MWh.`);
+  const gaps = ds.filter((d) => d.coverage_pct != null && d.coverage_pct < 95).map((d) => d.date.slice(5));
+  if (gaps.length) out.push(`Data gaps (PC off) on ${gaps.join(", ")}: those days read low.`);
+  out.push("");
+  out.push("2. COMPARED WITH THE WEEK BEFORE");
+  const prevInv = prev.filter((d) => d.inverter_mwh != null);
+  if (prevInv.length >= 5 && prev.some((d) => d.fault_lost_mwh_est != null)) {
+    const pp = S(prev, "inverter_mwh") / prevInv.length, cp = prod / Math.max(1, ds.filter((d) => d.inverter_mwh != null).length);
+    out.push(`Average day ${cp.toFixed(1)} MWh vs ${pp.toFixed(1)} MWh (${cp >= pp ? "+" : ""}${(cp - pp).toFixed(1)}). Losses ${lost.toFixed(1)} vs ${lostOf(prev).toFixed(1)} MWh.`);
+    out.push(`PR ${f1(avg(ds, "pr_pct"))} vs ${f1(avg(prev, "pr_pct"))} %; irradiation ${f1(S(ds, "irradiation_kwh_m2"))} vs ${f1(S(prev, "irradiation_kwh_m2"))} kWh/m2.`);
+  } else out.push("Not enough data from the week before yet (loss tracking began 23 Nov 2026).");
+  out.push("");
+  out.push("3. OPEN CONTRACTOR ISSUES (checked against the data)");
+  const invDays = ds.filter((d) => d.inverters);
+  const insDays = invDays.filter((d) => d.alarms.some((a) => a.code === 39));
+  out.push(`- Morning insulation alarms (code 39): ${!invDays.length ? "cannot tell (no inverter data)" : insDays.length ? `STILL OCCURRING on ${insDays.length} of ${invDays.length} day${invDays.length === 1 ? "" : "s"} with inverter data, about ${S(insDays, "fault_lost_mwh_est").toFixed(1)} MWh lost (est.)` : `NOT SEEN on ${invDays.length} days - looks fixed`}.`);
+  const strDays = ds.filter((d) => d.dead_strings != null && d.string_lost_mwh_est != null);
+  const dead = strDays.length ? strDays[0].dead_strings : null, deadOld = strDays.length ? strDays[strDays.length - 1].dead_strings : null;
+  out.push(`- Dead DC strings: ${dead == null ? "cannot tell (no string check)" : dead === 0 ? "NONE in the latest check - looks fixed" : `STILL ${dead} strings${deadOld != null && deadOld !== dead ? ` (was ${deadOld})` : ""}, about ${S(strDays, "string_lost_mwh_est").toFixed(1)} MWh lost (est.) if faults`}.`);
+  const p07 = ds.find((d) => d.p07_ratio != null && (d.coverage_pct ?? 0) >= 95) || ds.find((d) => d.p07_ratio != null);
+  out.push(`- P07 meter: ${!p07 ? "cannot tell (no feeder data)" : Math.abs(p07.p07_ratio - 1) <= 0.03 ? `LOOKS FIXED (reads ${Math.round(p07.p07_ratio * 100)} % of P01+P04 on ${p07.date})` : `STILL FAULTY (reads ${Math.round(p07.p07_ratio * 100)} % of P01+P04 on ${p07.date})`}.`);
+  const inv14 = ds.flatMap((d) => (d.events || []).filter((e) => e.kind === "inverter outage" && /STS2\.INV14\b/.test(e.what)).map(() => d.date));
+  const inv14low = ds.filter((d) => d.inverter_mwh != null).filter((d) => (d.low_inverters || []).some((x) => x.startsWith("STS2.INV14"))).length;
+  out.push(`- STS2.INV14 dropping out: ${!invDays.length ? "cannot tell" : inv14.length || inv14low ? `STILL OCCURRING (${inv14.length} outage${inv14.length === 1 ? "" : "s"}, low output on ${inv14low} day${inv14low === 1 ? "" : "s"})` : "no outages this week"}.`);
   const trips = (g.trips || []).filter((t) => t.date >= since && t.date <= until);
-  const p07 = ds.find((d) => d.p07_ratio != null)?.p07_ratio;
-  return [
-    `MOUNT COFFEE SOLAR · WEEKLY REVIEW (${since} to ${ds[0]?.date || ""}, ${ds.length} days)`,
-    `Produced ${prod.toFixed(1)} MWh. Estimated losses ${lost.toFixed(1)} MWh (${prod + lost > 0 ? ((lost / (prod + lost)) * 100).toFixed(1) : "0"} % of potential):`,
-    `  grid trips ${S("trip_lost_mwh_est").toFixed(1)}, inverter alarms ${S("fault_lost_mwh_est").toFixed(1)}, dead strings ${S("string_lost_mwh_est").toFixed(1)}, export limit ${S("curtailed_mwh_est").toFixed(1)} MWh.`,
-    `Trips: ${trips.length}${trips.length ? " - " + trips.map((t) => `${t.trip_utc} ${t.scope} ${t.cause} (${t.duration_min || "?"} min)`).join("; ") : ""}.`,
-    `P07 meter: ${p07 != null ? `reads ${Math.round(p07 * 100)} % of P01+P04` + (Math.abs(p07 - 1) <= 0.03 ? " (looks fixed)" : " (still faulty)") : "no data"}.`,
-    "(Automatic numbers-only review; the written AI review needs the API key on the forecast PC.)",
-  ].join("\n");
+  const durs = trips.map((t) => Number(t.duration_min)).filter((x) => x > 0);
+  out.push(`- Reconnection delay after trips: ${durs.length ? `${Math.min(...durs)}-${Math.max(...durs)} min over ${durs.length} trips${Math.max(...durs) > 6 ? " - STILL LONG" : " - improved"}` : "no trips this week to judge"}.`);
+  out.push("- Reactive power / cos phi setpoints recorded by the logger: cannot be checked from the data; open until the contractor confirms.");
+  out.push("");
+  out.push("4. GRID TRIPS (for NLDC)");
+  if (trips.length) {
+    out.push(`${trips.length} trips, about ${trips.reduce((a, t) => a + (Number(t.energy_lost_mwh_est) || 0), 0).toFixed(1)} MWh lost (est.):`);
+    for (const t of trips.slice().reverse()) out.push(`  ${t.trip_utc} ${t.scope}: ${t.cause}, ${t.freq_min_hz}-${t.freq_max_hz} Hz, back after ${t.duration_min || "?"} min`);
+  } else out.push("No trips this week.");
+  out.push("");
+  out.push("5. TOP ACTIONS (most energy first)");
+  const acts = [
+    [S(insDays, "fault_lost_mwh_est"), "Contractor: insulation tests on the arrays and review of the insulation trip threshold."],
+    [trips.reduce((a, t) => a + (Number(t.energy_lost_mwh_est) || 0), 0), "NLDC: grid frequency events causing trips; contractor: shorten the reconnection delay if the grid code allows."],
+    [S(strDays, "string_lost_mwh_est"), "Contractor: check the as-built string count; inspect fuses, connectors and DC isolators of the dead strings."],
+    [S(ds, LK[3]), "Dispatch: review the 16.64 MW export limit at midday."],
+  ].filter(([v]) => v > 0.05).sort((a, b) => b[0] - a[0]).slice(0, 3);
+  acts.forEach(([v, t], i) => out.push(`${i + 1}. ${t} (~${v.toFixed(1)} MWh this week)`));
+  if (!acts.length) out.push("No significant losses measured this week.");
+  out.push("");
+  out.push("All losses are estimates from the plant's own data. (Automatic review, no AI.)");
+  return out.join("\n");
 }
