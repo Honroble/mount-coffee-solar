@@ -4,7 +4,7 @@ J. A. Harris's factors (NEW = P_AC * max(0.3, 0.790 - 0.182*AOD)) were fitted on
 fits, for each hour of the day, how much of the models' panel-plane power the plant really delivers:
 
     ratio = actual MW in the hour / P_AC(mean of the models' irradiance and temperature)
-    ratio ~ a[hour] - b * AOD                     (least squares, outage days left out)
+    ratio ~ a[hour] - b * AOD                     (least squares, outage days and trip hours left out)
 
 and the 10 % / 90 % spread of actual / forecast per hour, used as the likely range. It checks the result on
 data it was not fitted on (first half vs second half of the period, both ways) and only switches the live
@@ -175,10 +175,27 @@ def main():
     last = (datetime.now(timezone.utc) - timedelta(days=1)).date()
     fc = fetch_history(first.isoformat(), last.isoformat())
 
+    # hours touched by a plant or station trip (trip_log.py: grid frequency events) are random outages, not how the
+    # plant converts sunlight, so they are left out. Recurring effects (e.g. the morning insulation delay) stay in.
+    trip_spans = []
+    try:
+        import csv as _csv
+        with open(os.path.join(live, "trips.csv"), encoding="utf-8", newline="") as fh:
+            for r in _csv.DictReader(fh):
+                t0 = datetime.strptime(r["trip_utc"], "%Y-%m-%d %H:%M")
+                t1 = datetime.strptime(r["restored_utc"], "%Y-%m-%d %H:%M") if r.get("restored_utc") else t0 + timedelta(hours=2)
+                trip_spans.append((t0, t1 + timedelta(minutes=10)))   # +10 min for the ramp back up
+    except Exception:
+        pass
+
+    def tripped(t):
+        tn = t.replace(tzinfo=None)
+        return any(a < tn and b > tn - timedelta(hours=1) for a, b in trip_spans)
+
     def rows_of(src):
         out = []
         for t, mw in src.items():
-            if t.strftime("%Y-%m-%d") in OUTAGE_DAYS or t not in fc:
+            if t.strftime("%Y-%m-%d") in OUTAGE_DAYS or t not in fc or tripped(t):
                 continue
             pac, aod = fc[t]
             if pac < 0.5:
