@@ -229,10 +229,17 @@ def main():
                 w.writerow({k: r.get(k, "") for k in FIELDS})
     from alerts import post
     log = []
-    if changed:
+    flag = os.path.join(live, "trips_sheet_sent.txt")      # exists once the Trips tab has accepted the current table
+    if changed and os.path.exists(flag):
+        os.remove(flag)
+    if rows and not os.path.exists(flag):
         res = post(cfg, {"action": "replace", "sheet": "Trips", "header": FIELDS,
                          "rows": [[r.get(k, "") for k in FIELDS] for r in rows[:2000]]})
-        log.append(f"Trips tab: {res}")
+        if '"ok":true' in res.replace(" ", ""):
+            with open(flag, "w", encoding="utf-8") as fh:
+                fh.write(now.isoformat())
+        if changed or '"ok":true' in res.replace(" ", ""):
+            log.append(f"Trips tab: {res}")
     def describe(t):
         dur = f" ({t['duration_min']} min)" if t["duration_min"] != "" else ""
         return (f"{t['trip_utc']} GMT, {t['scope']}: {t['cause']} ({t['inverters_tripped']} inverters). "
