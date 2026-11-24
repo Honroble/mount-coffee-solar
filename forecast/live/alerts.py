@@ -358,8 +358,33 @@ def main():
             subprocess.run([sys.executable, os.path.join(HERE, "verify.py"), "--config", a.config], timeout=300, capture_output=True)
         except Exception:
             pass
-    # weather-model calibration (calibrate_nwp.py): refit once a day after sunset, so the 14-day level stays current
-    if now.hour >= 20:
+    # catch up a shift report that did not go out (the PC asleep or offline at 07:00 / 19:05 GMT): morning until noon,
+    # evening until midnight; tried at most every 30 min
+    period = "morning" if 7 <= now.hour < 12 else "evening" if now.hour >= 19 and (now.hour > 19 or now.minute >= 20) else None
+    if period:
+        try:
+            sent = json.load(open(os.path.join(live, "reports_sent.json"), encoding="utf-8"))
+        except Exception:
+            sent = {}
+        key, tried = f"{now:%Y-%m-%d}_{period}", state.get(f"report_retry_{period}")
+        if key not in sent and (not tried or now - datetime.fromisoformat(tried) > timedelta(minutes=30)) \
+                and (period == "evening" or now.hour > 7 or now.minute >= 20):
+            state[f"report_retry_{period}"] = now.isoformat()
+            if not a.dry_run:
+                try:
+                    import subprocess
+                    subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "agent_report.py"), "--config", a.config,
+                                    "--period", period], timeout=300, capture_output=True)
+                except Exception:
+                    pass
+    # weather-model calibration (calibrate_nwp.py): refit once a day after sunset, so the 14-day level stays current;
+    # if the PC slept through the evening, catch up the next morning
+    try:
+        with open(os.path.join(live, "nwp_calibration.json"), encoding="utf-8") as fh:
+            _fitted = json.load(fh).get("fitted_utc", "")[:10]
+    except Exception:
+        _fitted = ""
+    if now.hour >= 20 or (now.hour >= 6 and _fitted < (now - timedelta(days=1)).strftime("%Y-%m-%d")):
         try:
             with open(os.path.join(live, "nwp_calibration.json"), encoding="utf-8") as fh:
                 fitted = json.load(fh).get("fitted_utc", "")

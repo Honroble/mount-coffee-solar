@@ -52,6 +52,16 @@ def main():
     res = post(cfg, {"action": "notify", "kind": "report", "subject": f"Mount Coffee solar: {title} {now:%Y-%m-%d}", "text": text})
     with open(log, "a", encoding="utf-8") as fh:
         fh.write(f"{now:%Y-%m-%d %H:%M} report ({period}) sent [{res[:60]}]\n")
+    # remember a delivered report, so alerts.py can resend one that failed (e.g. no internet right after the PC wakes)
+    if '"ok":true' in res.replace(" ", ""):
+        sp = os.path.join(cfg["live_dir"], "reports_sent.json")
+        try:
+            sent = json.load(open(sp, encoding="utf-8"))
+        except Exception:
+            sent = {}
+        sent[f"{now:%Y-%m-%d}_{period}"] = now.strftime("%H:%M")
+        with open(sp, "w", encoding="utf-8") as fh:
+            json.dump(dict(sorted(sent.items())[-60:]), fh)
     print(res)
 
 

@@ -6,6 +6,9 @@ Rules (from 58 days of 1-minute plant data, Sep-Nov 2026; review in the dry seas
   ALARM  down >= 8 MW within 5 min, or >= 10 MW within 15 min                   (about 1 a day; screen, sound, e-mail)
   TRIP   down >= 5 MW within 1 min and a station drops to ~0 while it was producing, or the plant is near zero
          while the zone sensors show sun (> 300 W/m2)                           (rare; treat as losing a unit)
+  OFFLINE (shown and mailed as TRIP) output below 0.5 MW for 3+ minutes in sun (> 200 W/m2) after the plant had
+         produced over 2 MW in the last 3 hours, whatever the drop history (catches trips the poller missed, e.g. after
+         a restart); e-mailed once, then at most hourly while it lasts. Morning start-up delays do not count.
   Sky state from the swing of the last 30 min (1-minute means): steady < 2 MW, moderate 2-6 MW, variable > 6 MW.
   Reserve to hold against solar = 40 / 60 / 75 % of current output (95 % of 15-minute drops were smaller).
 No alarms when the plant was below 2 MW over the last 15 min. An e-mail at most every 15 min; a level clears after
@@ -25,7 +28,9 @@ sys.path.insert(0, HERE)
 WATCH_5, ALARM_5, ALARM_15, TRIP_1 = 5.0, 8.0, 10.0, 5.0
 MIN_PLANT_MW = 2.0
 STATES = [(2.0, "steady", 0.40), (6.0, "moderate", 0.60), (1e9, "variable", 0.75)]
-HOLD_MIN, MAIL_EVERY_MIN = 15, 15
+HOLD_MIN, MAIL_EVERY_MIN, OFFLINE_MAIL_EVERY_MIN = 15, 15, 60
+LOOKBACK_MIN = 180
+OFFLINE_MW, OFFLINE_MIN, OFFLINE_GHI, OFFLINE_HAD_MW = 0.5, 3, 200, 2.0
 RANK = {"none": 0, "watch": 1, "alarm": 2, "trip": 3}
 
 
@@ -49,7 +54,7 @@ def read_now(live, now):
                     t = datetime.strptime(r["time_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
                 except (KeyError, ValueError):
                     continue
-                if t < now - timedelta(minutes=45) or t > now + timedelta(minutes=1):
+                if t < now - timedelta(minutes=LOOKBACK_MIN) or t > now + timedelta(minutes=1):
                     continue
                 rows.append({"t": t, "p": _f(r.get("pv_sum_mw")), "sts": [_f(r.get(f"sts{i}_kw")) for i in (1, 2, 3, 4)],
                              "ghi": max([v for v in (_f(r.get("zoneA_ghi_wm2")), _f(r.get("zone4_ghi_wm2"))) if v is not None], default=None)})
@@ -89,6 +94,19 @@ def evaluate(rows, now):
             if swing < lim:
                 out.update(sky=name, swing30_mw=round(swing, 2), reserve_pct=int(pct * 100), reserve_mw=round(pct * p_now, 1))
                 break
+    # offline: near zero for OFFLINE_MIN+ minutes in sun after producing today (independent of the drop history)
+    run = 0
+    for t, p in reversed(mm):
+        if p < OFFLINE_MW:
+            run += 1
+        else:
+            break
+    had = max([p for t, p in mm[:len(mm) - run]], default=0.0)
+    if run >= OFFLINE_MIN and had > OFFLINE_HAD_MW and (rows[-1]["ghi"] or 0) > OFFLINE_GHI:
+        out.update(level="trip", offline=True,
+                   message=f"PLANT OFFLINE: output {p_now:.1f} MW for {run} min in sunshine ({rows[-1]['ghi']:.0f} W/m2) after "
+                           f"{had:.1f} MW earlier. Treat as losing a unit; check frequency and call the plant.")
+        return out
     if max(last15, default=0) < MIN_PLANT_MW:
         return out
     # trip: a station that was producing went to ~0 within the last minute, or the plant is at ~0 in sunshine
@@ -157,7 +175,8 @@ def run(cfg, now=None, send=True, config_path=None):
         due = True
         if last:
             try:
-                due = now - datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) >= timedelta(minutes=MAIL_EVERY_MIN) \
+                every = OFFLINE_MAIL_EVERY_MIN if res.get("offline") else MAIL_EVERY_MIN
+                due = now - datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) >= timedelta(minutes=every) \
                     or (res["level"] == "trip" and prev.get("last_mail_level") != "trip")
             except ValueError:
                 due = True
@@ -165,7 +184,7 @@ def run(cfg, now=None, send=True, config_path=None):
             sky = f" Sky {res['sky']}: hold about {res['reserve_mw']} MW reserve against solar." if res.get("reserve_mw") is not None else ""
             text = (f"{res['message']}{sky}\n\n{now:%Y-%m-%d %H:%M} GMT. Decision support from the Mount Coffee forecast PC; "
                     "the dispatcher decides. Live view: control-room screen / dashboard.")
-            subject = f"Mount Coffee solar {'TRIP?' if res['level'] == 'trip' else 'ALARM'}: {res['message'][:70]}"
+            subject = f"Mount Coffee solar {'OFFLINE' if res.get('offline') else 'TRIP?' if res['level'] == 'trip' else 'ALARM'}: {res['message'][:70]}"
             # send in a separate process: the e-mail can take a minute and must not hold up the live poller
             with open(os.path.join(live, "ramp_mail_pending.json"), "w", encoding="utf-8") as fh:
                 json.dump({"action": "notify", "kind": "ramp", "subject": subject, "text": text}, fh)

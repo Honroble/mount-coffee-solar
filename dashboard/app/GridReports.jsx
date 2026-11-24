@@ -106,7 +106,10 @@ export default function GridReports() {
   const today = g.days.find((d) => d.partial) || g.days[0];
   const full = g.days.filter((d) => !d.partial);
   const last = g.days.find((d) => d.station) || null;
-  const events = g.days.slice(0, 7).flatMap((d) => (d.events || []).slice().reverse().map((e) => ({ ...e, date: d.date })));
+  const tripEvents = (g.trips || []).map((t) => ({ date: t.date, time: t.trip_utc.slice(11, 16), kind: "plant trip",
+    what: `${t.scope === "plant" ? "whole plant" : t.scope}: ${t.cause}; back ${t.restored_utc ? t.restored_utc.slice(11, 16) : "not yet"}${t.duration_min ? ` (${t.duration_min} min)` : ""}; ~${t.energy_lost_mwh_est} MWh lost` }));
+  const events = g.days.slice(0, 7).flatMap((d) => (d.events || []).slice().reverse().map((e) => ({ ...e, date: d.date })))
+    .concat(tripEvents).sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
   return (
     <>
       <div className={`alert ${g.p07.state === "fixed" ? "reserve" : ""}`} style={{ marginBottom: 10 }}>
@@ -174,6 +177,23 @@ export default function GridReports() {
         </div>
         {full.length === 0 && <div className="sub" style={{ marginTop: 6 }}>Feeder data started on 22 Nov 2026 at 15:45 GMT, so the first full day is 23 Nov.</div>}
       </section>
+      <section className="panel">
+        <h2>Plant trips</h2>
+        <div className="sub">Whole-plant or station trips found in the inverter data (80 % of inverters to fault while producing), newest first. Also logged in the Google Sheet's Trips tab and e-mailed. Energy lost is an estimate from the output before the trip, scaled by irradiance.</div>
+        {!(g.trips || []).length ? <div className="empty">No trips recorded.</div> : (
+          <div className="scroll" style={{ marginTop: 8 }}>
+            <table>
+              <thead><tr><th>Trip (GMT)</th><th>Back</th><th className="num">Min</th><th>Scope</th><th>Cause</th><th className="num">Frequency (Hz)</th><th className="num">MW before</th><th className="num">Lost (MWh est.)</th><th>Breakers</th></tr></thead>
+              <tbody>{g.trips.map((t) => (
+                <tr key={t.trip_utc + t.scope}><td style={{ whiteSpace: "nowrap" }}>{t.trip_utc}</td><td>{t.restored_utc ? t.restored_utc.slice(11) : <span className="bad-text">not yet</span>}</td>
+                  <td className="num">{t.duration_min || "—"}</td><td>{t.scope === "plant" ? "whole plant" : t.scope}</td><td className="bad-text">{t.cause}</td>
+                  <td className="num">{t.freq_min_hz}–{t.freq_max_hz}</td><td className="num">{t.mw_before}</td><td className="num">{t.energy_lost_mwh_est}</td><td>{t.breakers}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        {(g.trips || []).length ? <div className="sub" style={{ marginTop: 6 }}>Total: {g.trips.length} trips, about {g.trips.reduce((a, t) => a + (Number(t.energy_lost_mwh_est) || 0), 0).toFixed(1)} MWh lost.</div> : null}
+      </section>
       <Alarms days={g.days} />
       <Hourly days={g.days} />
       <div className="grid two">
@@ -199,13 +219,13 @@ export default function GridReports() {
         </section>
         <section className="panel">
           <h2>Events</h2>
-          <div className="sub">Breaker changes, trips and faults on P07/P01/P04; changes to the export setpoint; inverter alarms; grid frequency outside 49.5–50.5 Hz; inverters off for 15+ min while the rest of the plant produced. Last 7 days, newest first.</div>
+          <div className="sub">Breaker changes, trips and faults on P07/P01/P04; changes to the export setpoint; inverter alarms; plant trips; grid frequency outside 49.5–50.5 Hz; inverters off for 15+ min while the rest of the plant produced. Last 7 days, newest first.</div>
           {events.length === 0 ? <div className="empty">No events.</div> : (
             <div className="scroll" style={{ marginTop: 8 }}>
               <table>
                 <thead><tr><th>Date</th><th>Time (GMT)</th><th>Event</th><th>Details</th></tr></thead>
                 <tbody>{events.map((e, i) => (
-                  <tr key={i}><td style={{ whiteSpace: "nowrap" }}>{e.date}</td><td>{e.time}</td><td className={e.kind === "trip" || e.kind === "fault" || e.kind === "breaker open" ? "bad-text" : e.kind === "setpoint change" ? "" : "warn-text"}>{e.kind}</td><td>{e.what}</td></tr>
+                  <tr key={i}><td style={{ whiteSpace: "nowrap" }}>{e.date}</td><td>{e.time}</td><td className={e.kind === "trip" || e.kind === "plant trip" || e.kind === "fault" || e.kind === "breaker open" ? "bad-text" : e.kind === "setpoint change" ? "" : "warn-text"}>{e.kind}</td><td>{e.what}</td></tr>
                 ))}</tbody>
               </table>
             </div>

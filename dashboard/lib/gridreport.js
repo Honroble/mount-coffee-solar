@@ -120,7 +120,15 @@ export function gridReport() {
     const w = JSON.parse(fs.readFileSync(path.join(LIVE_DIR, "widget_now.json"), "utf8"));
     control = { time: w.time_utc, setpoint_mw: w.power_setpoint_mw ?? null, power_limit_pct: w.power_limit_user_pct ?? null };
   } catch { /* not yet */ }
+  let trips = [];
+  try {
+    const lines = fs.readFileSync(path.join(LIVE_DIR, "trips.csv"), "utf8").trim().split(/\r?\n/);
+    const split = (l) => { const out = []; let cur = "", q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === "," && !q) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out; };
+    const head = split(lines[0]);
+    trips = lines.slice(1).map((l) => Object.fromEntries(split(l).map((v, i) => [head[i], v])));
+  } catch { /* none yet */ }
   return {
+    trips,
     control,
     source: "P01 + P04 (station feeders)",
     note: "Export from the station feeders includes the small 22 kV busbar and cable losses up to P07 (probably under 1 %). Night-time import reads zero on these relays, so auxiliary consumption is not measured here. J07's meter remains the reference for official figures.",
