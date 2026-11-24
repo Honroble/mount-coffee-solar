@@ -28,6 +28,15 @@ const MODES = {
   report: `
 Task: write the {{PERIOD}} shift report for the operators, to be sent by e-mail. Use the tools first (live status, today's or yesterday's power series, forecast vs actual, daily energy, hourly peaks, weather outlook, alerts, inverters).
 Format: plain text, no markdown tables, max ~250 words. Sections: Summary (2-3 lines), Production, Forecast performance, Equipment & data issues, Outlook / what to watch. Use numbers.`,
+  weekly: `
+Task: write the weekly plant review for the SCADA/EMS team lead (Julius), to be sent by e-mail. Call get_plant_issues (days 7, and 14 for comparison if useful), get_daily_energy and get_alerts first.
+Format: plain text, no markdown tables, max ~400 words. Sections:
+1. Week in numbers: energy produced, PR, availability, total estimated losses (MWh and % of potential), split by cause.
+2. What got worse / what improved compared with the week before (only if the data covers it; say when it does not).
+3. Open contractor issues: one line each for the open issues in the tool result, with what this week's data shows (still occurring / improved / looks fixed / cannot tell) and the number behind it.
+4. Grid: trips (count, causes, frequency range, energy lost) - for discussion with NLDC.
+5. Top 3 actions for next week, most energy first.
+Be factual; all loss numbers are estimates and should be called that.`,
   investigate: `
 Task: an alert just fired. Investigate it with the tools (data around the alert time: power series, meteo, inverters, forecast vs actual, live status) and write a short analysis to append to the alert e-mail.
 Format: plain text, max ~120 words: "Likely cause:", "Evidence:" (2-4 bullet lines with numbers), "Suggested checks:" (1-3 lines). Be honest about uncertainty.`,
@@ -51,7 +60,7 @@ export function agentConfigured() {
 
 /**
  * messages: [{role:"user"|"assistant", content:string}]  (chat history, last one from the user)
- * mode: "chat" | "report" | "investigate";  period: "morning" | "evening" (reports)
+ * mode: "chat" | "report" | "weekly" | "investigate";  period: "morning" | "evening" (reports)
  */
 export async function runAgent({ messages, mode = "chat", period = "evening" }) {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("The AI agent is not set up on this PC yet (no ANTHROPIC_API_KEY). Run dashboard\\setup_agent.ps1.");

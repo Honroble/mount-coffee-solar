@@ -8,6 +8,7 @@ import { getNow } from "@/lib/now";
 import { dailyActuals } from "@/lib/nwp";
 import { hourlyByDate, hourlyProfile, liveScore, summaryAll } from "@/lib/summary";
 import { replay15, inverters as invHistory, frequency, reportDaily } from "@/lib/history";
+import { gridReport } from "@/lib/gridreport";
 
 const PLANT = {
   name: "LEC Mount Coffee PV plant, Liberia (Liberia Electricity Corporation)",
@@ -108,9 +109,42 @@ export const TOOLS = [
     description: "Alerts the system sent (low-output forecast, output below satellite estimate, curtailment, inverter, stale data, logger disk) in the last N days, and recent collector errors.",
     input_schema: { type: "object", properties: { days: { type: "integer", description: "default 2" } } },
   },
+  {
+    name: "get_plant_issues",
+    description: "Plant performance and known issues per day for the last N days (default 7): export (P01+P04), inverter energy, PR, availability, losses split into grid trips / inverter alarms / dead DC strings / curtailment (estimates), plant trips with cause and frequency, inverter alarms grouped by code, lowest insulation resistance, P07 meter ratio, dead strings from the string check, events, and the open issues list raised with the contractor.",
+    input_schema: { type: "object", properties: { days: { type: "integer", description: "default 7, max 31" } } },
+  },
+];
+
+// Open issues raised with the plant contractor (meeting points, Nov 2026); the agent checks each against the data.
+const OPEN_ISSUES = [
+  { id: "insulation", text: "Morning low-insulation alarms (code 39) keep inverters in fault until ~08:30 GMT", check: "alarms with code 39 per day; fault_lost_mwh_est" },
+  { id: "strings", text: "28 DC strings with no current on 10 inverters", check: "dead_strings and string_lost_mwh_est" },
+  { id: "p07", text: "P07 outgoing feeder meter reads ~34 % low (VT wiring/ratio)", check: "p07_ratio near 1.00 means fixed" },
+  { id: "inv14", text: "STS2.INV14 dropping out", check: "inverter outage events for STS2.INV14" },
+  { id: "reconnect", text: "Plant takes 12-14 min to reconnect after grid frequency trips", check: "trips: duration_min" },
+  { id: "setpoints", text: "Reactive power / cos phi setpoints not recorded by the logger", check: "not visible in these data; report as still open unless told otherwise" },
 ];
 
 const handlers = {
+  get_plant_issues: async ({ days = 7 } = {}) => {
+    const g = gridReport();
+    const n = Math.min(31, Math.max(1, Number(days) || 7));
+    const keep = ["date", "partial", "export_mwh", "inverter_mwh", "irradiation_kwh_m2", "pr_pct", "pr_temp_corr_pct", "availability_pct",
+      "trip_lost_mwh_est", "fault_lost_mwh_est", "string_lost_mwh_est", "dead_strings", "curtailed_mwh_est", "minutes_at_limit",
+      "p07_ratio", "f_min", "f_max", "coverage_pct", "low_inverters", "sensor_status"];
+    const list = g.days.slice(0, n).map((d) => {
+      const o = Object.fromEntries(keep.map((k) => [k, d[k] ?? null]));
+      o.alarms = (d.alarms || []).map((a) => ({ code: a.code, name: a.name, inverters: a.inverters.length, from: a.from, to: a.to, inverter_minutes: a.minutes }));
+      o.lowest_insulation_kohm = Object.entries(d.inverters || {}).filter(([, v]) => v.iso_min_kohm != null && v.iso_min_kohm < 100)
+        .sort((x, y) => x[1].iso_min_kohm - y[1].iso_min_kohm).slice(0, 8).map(([k, v]) => `${k} ${v.iso_min_kohm}`);
+      o.events = (d.events || []).filter((e) => e.kind !== "inverter alarm").slice(0, 25);
+      return o;
+    });
+    const since = list.length ? list[list.length - 1].date : "";
+    return { days: list, trips: (g.trips || []).filter((t) => t.date >= since), p07_check: g.p07, export_source: g.source, open_issues: OPEN_ISSUES,
+      note: "Losses are estimates. Loss categories start on 23 Nov 2026 (inverter alarm data); days with coverage_pct < 95 have missing minutes." };
+  },
   get_plant_info: async () => PLANT,
 
   get_live_status: async () => {

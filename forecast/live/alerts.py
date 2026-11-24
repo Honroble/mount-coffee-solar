@@ -377,6 +377,22 @@ def main():
                                     "--period", period], timeout=300, capture_output=True)
                 except Exception:
                     pass
+    # weekly plant review (agent_report.py --period weekly): Mondays from 07:30 GMT, retried until sent that day
+    if now.weekday() == 0 and (now.hour > 7 or (now.hour == 7 and now.minute >= 30)) and now.hour < 18:
+        try:
+            sent = json.load(open(os.path.join(live, "reports_sent.json"), encoding="utf-8"))
+        except Exception:
+            sent = {}
+        tried = state.get("report_retry_weekly")
+        if f"{now:%Y-%m-%d}_weekly" not in sent and (not tried or now - datetime.fromisoformat(tried) > timedelta(minutes=30)):
+            state["report_retry_weekly"] = now.isoformat()
+            if not a.dry_run:
+                try:
+                    import subprocess
+                    subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "agent_report.py"), "--config", a.config,
+                                    "--period", "weekly"], timeout=420, capture_output=True)
+                except Exception:
+                    pass
     # weather-model calibration (calibrate_nwp.py): refit once a day after sunset, so the 14-day level stays current;
     # if the PC slept through the evening, catch up the next morning
     try:

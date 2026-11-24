@@ -2,6 +2,7 @@
 // Used by the dashboard quick buttons, the shift reports and the alert e-mails
 // whenever no Anthropic API key is set.
 import { runTool } from "@/lib/agent/tools";
+import { gridReport } from "@/lib/gridreport";
 import { clearSkyGhi } from "@/lib/irradiance";
 import { kpiDays, kpiSummary } from "@/lib/kpi";
 
@@ -166,4 +167,24 @@ export async function quickContext() {
   }
   if (hint.length) out.push(`• Likely: ${hint.join("; ")}`);
   return out.join("\n");
+}
+
+// Weekly review without AI: the numbers only (used when no API key is set)
+export function quickWeekly() {
+  const g = gridReport();
+  const ds = g.days.filter((d) => !d.partial).slice(0, 7);
+  const S = (k) => ds.reduce((a, d) => a + (Number(d[k]) || 0), 0);
+  const prod = S("inverter_mwh"), lost = ["trip_lost_mwh_est", "fault_lost_mwh_est", "string_lost_mwh_est", "curtailed_mwh_est"].reduce((a, k) => a + S(k), 0);
+  const since = ds.length ? ds[ds.length - 1].date : "";
+  const until = ds[0]?.date || "";
+  const trips = (g.trips || []).filter((t) => t.date >= since && t.date <= until);
+  const p07 = ds.find((d) => d.p07_ratio != null)?.p07_ratio;
+  return [
+    `MOUNT COFFEE SOLAR · WEEKLY REVIEW (${since} to ${ds[0]?.date || ""}, ${ds.length} days)`,
+    `Produced ${prod.toFixed(1)} MWh. Estimated losses ${lost.toFixed(1)} MWh (${prod + lost > 0 ? ((lost / (prod + lost)) * 100).toFixed(1) : "0"} % of potential):`,
+    `  grid trips ${S("trip_lost_mwh_est").toFixed(1)}, inverter alarms ${S("fault_lost_mwh_est").toFixed(1)}, dead strings ${S("string_lost_mwh_est").toFixed(1)}, export limit ${S("curtailed_mwh_est").toFixed(1)} MWh.`,
+    `Trips: ${trips.length}${trips.length ? " - " + trips.map((t) => `${t.trip_utc} ${t.scope} ${t.cause} (${t.duration_min || "?"} min)`).join("; ") : ""}.`,
+    `P07 meter: ${p07 != null ? `reads ${Math.round(p07 * 100)} % of P01+P04` + (Math.abs(p07 - 1) <= 0.03 ? " (looks fixed)" : " (still faulty)") : "no data"}.`,
+    "(Automatic numbers-only review; the written AI review needs the API key on the forecast PC.)",
+  ].join("\n");
 }
