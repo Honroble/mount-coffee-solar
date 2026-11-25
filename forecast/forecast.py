@@ -105,8 +105,12 @@ def _fill_from_live(pl, now_csvs, upto=None):
     return pd.concat([pl, add]).sort_index(), len(live)
 
 
-def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=()):
-    """5-minute forecast (v2 models): issued at the latest 5-minute mark with plant data."""
+def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=(), issue_every_min=5):
+    """v2 models: issued at the latest `issue_every_min` mark with plant data.
+
+    issue_every_min=5 is the original behaviour (the newest 0-4 minutes are not used); 1 issues at the latest minute,
+    so a forecast reflects data up to about a minute old. The features are the same rolling windows either way.
+    """
     bundle = M.load(model_path)
     meta, models = bundle["meta"], bundle["models"]
     raw = read_many(_expand(iv2))
@@ -116,7 +120,8 @@ def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=()):
     pl = clean_plant(raw)
     pl, n_live = _fill_from_live(pl, now_csvs, cut)
     last = pl["P"].last_valid_index()
-    t0 = last.floor("5min")
+    step = max(1, int(issue_every_min))
+    t0 = last.floor(f"{step}min")
     fut = pd.date_range(pl.index.max() + pd.Timedelta("1min"), t0 + pd.Timedelta("75min"), freq="1min")
     pl = pl.reindex(pl.index.append(fut))
     pl = pl.join(solar(pl.index))
@@ -128,7 +133,7 @@ def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=()):
     s = read_satellite(sat) if (sat and meta.get("uses_satellite")) else None
     if s is not None and cut is not None:
         s = s[s.index <= cut - pd.Timedelta(minutes=meta.get("sat_delay", 30))]
-    f, _, valid, P15 = F5.build(m, "5min", s, meta.get("sat_delay", 30), with_targets=False)
+    f, _, valid, P15 = F5.build(m, f"{step}min", s, meta.get("sat_delay", 30), with_targets=False)
     if t0 not in f.index or pd.isna(f.loc[t0, "k"]) or f.loc[t0, "P_valid15"] < 0.8:
         raise SystemExit("Not enough plant data in the last 15 minutes")
     out = {"issued_utc": t0.strftime("%Y-%m-%d %H:%M"), "P_now_MW": round(float(P15.loc[t0]), 2),

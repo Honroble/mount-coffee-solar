@@ -20,7 +20,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, ReferenceArea,
 } from "recharts";
 
-const C = { actual: "#e6edf3", f15: "#f5a524", f60: "#3fb6c9", cs: "#6b7a8c", good: "#3fb950", bad: "#f85149" };
+const C = { actual: "#e6edf3", f15: "#f5a524", f30: "#d2a8ff", f60: "#3fb6c9", cs: "#6b7a8c", good: "#3fb950", bad: "#f85149" };
 const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "—" : Number(v).toFixed(d));
 const hhmm = (iso) => (iso ? iso.slice(11, 16) : "");
 const ageMin = (iso, now) => (iso ? Math.round((new Date(now) - new Date(iso)) / 60000) : null);
@@ -79,6 +79,7 @@ function useLive(initial) {
 }
 
 function LiveSection({ live, trimNight = false }) {
+  const [show60, setShow60] = useState(false);
   const f = live.latestForecast;
   const n = useNow();
   const w = n?.latest;
@@ -91,6 +92,12 @@ function LiveSection({ live, trimNight = false }) {
   })();
   const lowWarn = lowForecastWarning(f, live.now);
   const fAge = ageMin(f?.issued, live.now);
+  const fEvery = (() => {                              // interval between the last forecasts (1 or 5 min)
+    const fs = live.forecasts || [];
+    if (fs.length < 3) return null;
+    const d = (Date.parse(fs[fs.length - 1].issued) - Date.parse(fs[fs.length - 3].issued)) / 120000;
+    return d > 0 && d < 10 ? Math.round(d) : null;
+  })();
   const cAge = ageMin(live.collector.lastPlant, live.now);
   const state = !live.liveDirExists || cAge === null ? "off" : cAge > 20 ? "stale" : "ok";
   const stateText = {
@@ -101,7 +108,8 @@ function LiveSection({ live, trimNight = false }) {
 
   // Today's chart. Every line is placed at the CENTRE of the period it averages, on one 5-minute grid offset by 2.5 min:
   //  actual = 5-minute average (logger bucket k..k+5 -> k+2.5); forecast "15 min" = average over issue..issue+15 -> +7.5;
-  //  forecast "60 min" = average over issue+45..issue+60 -> +52.5. (Until 19 Nov the forecasts were drawn at the END of
+  //  forecast "30 min" = average over issue+15..issue+30 -> +22.5; forecast "60 min" = average over issue+45..issue+60 -> +52.5.
+  //  With forecasts every minute, several issues fall in one 5-minute slot: the newest one is shown. (Until 19 Nov the forecasts were drawn at the END of
   //  their 15-minute window against actuals labelled at the START of theirs, which made the forecast look ~10 min late,
   //  and the newest actuals from the 10-second readings were labelled at the end, 5 min off from the logger's.)
   const series = useMemo(() => {
@@ -123,6 +131,7 @@ function LiveSection({ live, trimNight = false }) {
     for (const fc of live.forecasts) {
       const t0 = new Date(fc.issued).getTime();
       if (fc.p15 !== null) put(slot(t0 + 7.5 * 60000), "f15", fc.p15);
+      if (fc.p30 !== null) put(slot(t0 + 22.5 * 60000), "f30", fc.p30);
       if (fc.p60 !== null) put(slot(t0 + 52.5 * 60000), "f60", fc.p60);
       if (fc.cs15 !== null) put(slot(t0 + 7.5 * 60000), "cs", fc.cs15);
     }
@@ -140,7 +149,7 @@ function LiveSection({ live, trimNight = false }) {
       <div className="panel-head">
         <div>
           <h2>Actual vs Forecast</h2>
-          <div className="sub">Actual output straight from the logger (10-second readings, read-only) and the forecast the PC issues every 5 minutes from the live readings, the weather station and satellite data.</div>
+          <div className="sub">Actual output straight from the logger (10-second readings, read-only) and the forecast the PC issues {fEvery ? `every ${fEvery === 1 ? "minute" : `${fEvery} minutes`}` : "regularly"} from the live readings, the weather station and satellite data.</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <span className="status"><span className={`dot ${!w ? "off" : nFresh ? "ok" : "stale"}`} />{w ? `Live · read ${n.ageS} s ago` : "Waiting for the live poller"}</span>{" "}
@@ -164,7 +173,11 @@ function LiveSection({ live, trimNight = false }) {
         <Kpi label="In 60 minutes" value={fmt(f?.p60)} unit="MW" note={f ? `clear sky ${fmt(f.cs60, 1)}` : ""} />
       </div>
 
-      <Legend items={[["Actual (5-min average)", C.actual], ["Forecast for the next 15 min (drawn at the middle of its 15 min)", C.f15], ["Forecast 45–60 min ahead", C.f60], ["Clear-sky maximum", C.cs, true]]} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Legend items={[["Actual (5-min average)", C.actual], ["Forecast 0–15 min ahead (its 15-min average, drawn at the middle)", C.f15], ["Forecast 15–30 min ahead", C.f30],
+          ...(show60 ? [["Forecast 45–60 min ahead", C.f60]] : []), ["Clear-sky maximum", C.cs, true]]} />
+        <label className="sub" style={{ cursor: "pointer", whiteSpace: "nowrap" }}><input type="checkbox" checked={show60} onChange={(e) => setShow60(e.target.checked)} /> show 60-min line</label>
+      </div>
       {series.length ? (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
@@ -175,7 +188,8 @@ function LiveSection({ live, trimNight = false }) {
             <Line dataKey="cs" name="Clear sky" stroke={C.cs} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
             <Line dataKey="actual" name="Actual" stroke={C.actual} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
             <Line dataKey="f15" name="Forecast 15 min" stroke={C.f15} dot={false} connectNulls isAnimationActive={false} />
-            <Line dataKey="f60" name="Forecast 60 min" stroke={C.f60} dot={false} connectNulls isAnimationActive={false} />
+            <Line dataKey="f30" name="Forecast 30 min" stroke={C.f30} dot={false} connectNulls isAnimationActive={false} />
+            {show60 && <Line dataKey="f60" name="Forecast 60 min" stroke={C.f60} dot={false} connectNulls isAnimationActive={false} />}
           </LineChart>
         </ResponsiveContainer>
       ) : (

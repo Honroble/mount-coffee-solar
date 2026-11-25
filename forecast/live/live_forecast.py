@@ -1,4 +1,11 @@
-"""Every 5 minutes: fetch satellite data, forecast 15/30/60 min ahead, log it and send it to the Google Sheet.
+"""Every minute (or every 5, see config): forecast 15/30/60 min ahead, log it and send it to the Google Sheet.
+
+Settings in config.json (defaults in brackets):
+  forecast_issue_every_min [5]  1 = issue at the latest minute and use the newest data; 5 = original behaviour.
+                                The "MCSolar Forecast" task must run at the same interval (install_live_tasks.ps1).
+  satellite_refresh_min    [5]  download satellite data only when the saved copy is older than this.
+  sheet_every_min          [5]  send to the Google Sheet only forecasts issued on these minute marks (keeps the
+                                sheet the same size as before); every forecast is still logged in forecast_log.csv.
 
 Run by Windows Task Scheduler (see install_live_tasks.ps1):
     python live/live_forecast.py --config live/config.json
@@ -49,8 +56,10 @@ def recent(live_dir, group, days=2):
     return [p for p in sorted(names) if os.path.exists(p)]
 
 
-def fetch_satellite(live_dir):
+def fetch_satellite(live_dir, refresh_min=0):
     out = os.path.join(live_dir, "sat_recent.csv")
+    if refresh_min and os.path.exists(out) and (time.time() - os.path.getmtime(out)) < refresh_min * 60:
+        return out                       # fresh enough: satellite data only changes every 10 minutes
     try:
         subprocess.run([sys.executable, os.path.join(ROOT, "fetch_satellite.py"), "--past-days", "1", "--out", out],
                        check=True, capture_output=True, timeout=120)
@@ -93,7 +102,7 @@ def _cell(v):
         return v
 
 
-def send_pending(cfg, live, logged):
+def send_pending(cfg, live, logged, sheet_every=1):
     """Send every logged forecast the sheet has not received yet (catches up after a failed send)."""
     state = os.path.join(live, "sheet_last_sent.txt")
     last = open(state, encoding="utf-8").read().strip() if os.path.exists(state) else ""
@@ -102,6 +111,8 @@ def send_pending(cfg, live, logged):
     pending, seen = [], set()
     for r in logged:
         k = r.get("issued_utc", "")
+        if sheet_every > 1 and k[-2:].isdigit() and int(k[-2:]) % sheet_every:
+            continue                     # 1-minute forecasts: only the 5-minute marks go to the sheet
         if k > last and k not in seen and r.get("model") != "none":
             pending.append(r)
             seen.add(k)
@@ -131,7 +142,8 @@ def main():
     os.makedirs(live, exist_ok=True)
     iv2 = cfg.get("iv2_override") or recent(live, "iv2")
     iv1 = cfg.get("iv1_override") or recent(live, "iv1")
-    sat = cfg.get("sat_override") or fetch_satellite(live)
+    every = max(1, int(cfg.get("forecast_issue_every_min", 5)))
+    sat = cfg.get("sat_override") or fetch_satellite(live, float(cfg.get("satellite_refresh_min", 5)))
     models = [("v2", "mcsolar_model_v2.joblib", True, True),
               ("satellite", "mcsolar_model_satellite.joblib", True, True),
               ("weather", "mcsolar_model_weather.joblib", True, False),
@@ -147,7 +159,7 @@ def main():
             continue
         try:
             if name == "v2":
-                fc = make_forecast_v2(path, iv2, iv1, sat, a.at, [] if a.at else recent_now(live))
+                fc = make_forecast_v2(path, iv2, iv1, sat, a.at, [] if a.at else recent_now(live), every)
             else:
                 fc = make_forecast(path, iv2, iv1 if need_iv1 else [], sat if need_sat else None, a.at)
             row = {"issued_utc": fc["issued_utc"], "p_now_mw": fc["P_now_MW"],
@@ -192,7 +204,7 @@ def main():
                            timeout=300, capture_output=True)
         except Exception:
             pass   # the regular "MCSolar Alerts" run repeats the check 3 minutes later
-        sent = send_pending(cfg, live, logged)
+        sent = send_pending(cfg, live, logged, max(1, int(cfg.get("sheet_every_min", 5))))
     with open(os.path.join(live, "forecast_runs.txt"), "a", encoding="utf-8") as fh:
         fh.write(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC  {row['issued_utc']}  {row['status'][:120]}"
                  f"{'  (duplicate, not logged again)' if duplicate else ''}  sheet: {sent}\n")
@@ -203,7 +215,11 @@ if __name__ == "__main__":
     # Hard stop: if the network hangs (e.g. a DNS lookup that never returns), end the run so Windows can start the next
     # one. A run still "Running" blocks every later run (the tasks use IgnoreNew); this froze all tasks on 18 Nov.
     import threading
-    _stop = threading.Timer(270, lambda: os._exit(3))
+    try:
+        _every = max(1, int(json.load(open(os.path.join(HERE, "config.json"), encoding="utf-8-sig")).get("forecast_issue_every_min", 5)))
+    except Exception:
+        _every = 5
+    _stop = threading.Timer(270 if _every >= 5 else 150, lambda: os._exit(3))
     _stop.daemon = True
     _stop.start()
     main()
