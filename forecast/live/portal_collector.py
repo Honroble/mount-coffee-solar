@@ -192,24 +192,76 @@ WIDGET_FIELDS = ["time_utc", "disk_used_pct", "disk_free_mb", "channels", "chann
                  "sts1_kw", "sts2_kw", "sts3_kw", "sts4_kw", "pv_sum_mw", "power_limit_user_pct", "power_setpoint_mw"]
 
 
+WIDGET_NAMES = {"zoneA_tamb_c": "Zone A Ambient Temperature", "zoneA_tmod_c": "Zone A Module Temperature",
+                "zoneA_ghi_wm2": "Zone A Irradiation", "zone4_tamb_c": "Zone 4 Ambient Temperature",
+                "zone4_tmod_c": "Zone 4 Module Temperature", "zone4_ghi_wm2": "Zone 4 Irradiation",
+                "sts1_kw": "STS1 Inverters", "sts2_kw": "STS2 Inverters", "sts3_kw": "STS3 Inverters",
+                "sts4_kw": "STS4 Inverters", "pv_sum_mw": "PV - Sum", "limits": "PowerLimit_User"}
+WIDGET_DEFAULT = {"zoneA_tamb_c": 2, "zoneA_tmod_c": 3, "zoneA_ghi_wm2": 4, "zone4_tamb_c": 6, "zone4_tmod_c": 7,
+                  "zone4_ghi_wm2": 8, "sts1_kw": 9, "sts2_kw": 10, "sts3_kw": 11, "sts4_kw": 12, "pv_sum_mw": 13, "limits": 14}
+
+
+def _widget_layout(p, cfg, refresh=False):
+    """(config id, {field: widget position}) of the logger homepage. Both change when someone edits the homepage, so
+    they are read from the start page (CONFIG_ID and WIDGET_CONFIG) and cached in <live_dir>/widget_layout.json;
+    positions are found by widget name, so a rearranged homepage still gives the right values."""
+    cache = os.path.join(cfg["live_dir"], "widget_layout.json")
+    if not refresh and os.path.exists(cache):
+        try:
+            c = json.load(open(cache, encoding="utf-8"))
+            return str(c["config_id"]), c["index"]
+        except Exception:
+            pass
+    try:
+        html = p.s.get(f"{p.base}/start", timeout=60).text
+        m = re.search(r"CONFIG_ID\s*=\s*[\"']?(\d{6,})", html, re.I)
+        idx = dict(WIDGET_DEFAULT)
+        w = re.search(r"var\s+WIDGET_CONFIG\s*=\s*(\[.*?\])\s*;\s*var\s+CONFIG_ID", html, re.S)
+        if w:
+            widgets = json.loads(w.group(1))
+            for field, name in WIDGET_NAMES.items():
+                for i, wd in enumerate(widgets):
+                    txt = json.dumps(wd.get("config", {}))
+                    if name in txt:
+                        idx[field] = i
+                        break
+        if m:
+            with open(cache, "w", encoding="utf-8") as fh:
+                json.dump({"config_id": m.group(1), "index": idx, "read_utc": datetime.now(timezone.utc).isoformat()}, fh)
+            return m.group(1), idx
+        with open(os.path.join(cfg["live_dir"], "logger_start_page.html"), "w", encoding="utf-8") as fh:
+            fh.write(html)                       # kept for diagnosis: the id was not found
+    except Exception:
+        pass
+    return cfg.get("widget_config_id", "1792744806"), dict(WIDGET_DEFAULT)
+
+
 def read_widgets(p, cfg):
     """Live values of the logger homepage (widget_update.json): disk, channel errors, zone sensors, station power, limits."""
-    r = p.s.post(f"{p.base}/widget_update.json", data={"config_id": cfg.get("widget_config_id", "1792744806"), "page": "-1"},
-                 timeout=60, headers={"Referer": f"{p.base}/start", "Origin": PORTAL})
-    r.raise_for_status()
-    j = r.json()
+    def ask(cid):
+        r = p.s.post(f"{p.base}/widget_update.json", data={"config_id": cid, "page": "-1"},
+                     timeout=60, headers={"Referer": f"{p.base}/start", "Origin": PORTAL})
+        r.raise_for_status()
+        return r.json()
+    cid, ix = _widget_layout(p, cfg)
+    j = ask(cid)
+    if isinstance(j, dict) and "config" in str(j.get("error", "")).lower():
+        cid, ix = _widget_layout(p, cfg, refresh=True)     # homepage was edited: read the new id and try once more
+        j = ask(cid)
+    if not isinstance(j, list):          # unexpected answer (session, portal change): say what came back
+        raise RuntimeError(f"widget_update.json returned {type(j).__name__}: {json.dumps(j)[:240]}")
     v = lambda i: (float(j[i]["v"]) if isinstance(j[i], dict) and j[i].get("v") not in (None, "") else None)
     info = j[0] if j and isinstance(j[0], dict) else {}
-    lim = j[14] if len(j) > 14 and isinstance(j[14], list) else [{}, {}]
+    v = lambda f: (float(j[ix[f]]["v"]) if len(j) > ix[f] and isinstance(j[ix[f]], dict) and j[ix[f]].get("v") not in (None, "") else None)
+    li = ix["limits"]
+    lim = j[li] if len(j) > li and isinstance(j[li], list) else [{}, {}]
     num = lambda d: float(d["v"]) if isinstance(d, dict) and d.get("v") not in (None, "") else None
     return {
         "time_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "disk_used_pct": round(100 * info.get("disk", {}).get("ratio", 0), 2) if info.get("disk") else None,
         "disk_free_mb": info.get("disk", {}).get("free"),
         "channels": info.get("channels", {}).get("count"), "channel_errors": info.get("channels", {}).get("errors"),
-        "zoneA_tamb_c": v(2), "zoneA_tmod_c": v(3), "zoneA_ghi_wm2": v(4),
-        "zone4_tamb_c": v(6), "zone4_tmod_c": v(7), "zone4_ghi_wm2": v(8),
-        "sts1_kw": v(9), "sts2_kw": v(10), "sts3_kw": v(11), "sts4_kw": v(12), "pv_sum_mw": v(13),
+        **{f: v(f) for f in WIDGET_NAMES if f != "limits"},
         "power_limit_user_pct": num(lim[0]) if lim else None, "power_setpoint_mw": num(lim[1]) if len(lim) > 1 else None,
     }
 
