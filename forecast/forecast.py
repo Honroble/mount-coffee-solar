@@ -105,7 +105,14 @@ def _fill_from_live(pl, now_csvs, upto=None):
     return pd.concat([pl, add]).sort_index(), len(live)
 
 
-def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=(), issue_every_min=5):
+class SatelliteTooOld(Exception):
+    """v2.1: the newest satellite value is older than the limit; use the no-satellite v2.1 model."""
+    def __init__(self, age):
+        super().__init__(f"satellite data too old ({age} min)" if age is not None else "no satellite data")
+        self.age = age
+
+
+def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=(), issue_every_min=5, opts=None):
     """v2 models: issued at the latest `issue_every_min` mark with plant data.
 
     issue_every_min=5 is the original behaviour (the newest 0-4 minutes are not used); 1 issues at the latest minute,
@@ -113,6 +120,10 @@ def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=(), is
     """
     bundle = M.load(model_path)
     meta, models = bundle["meta"], bundle["models"]
+    opts = opts or {}
+    fast = bool(meta.get("fast"))                 # v2.1
+    sat_delay = meta.get("sat_delay", 30)
+    max_age = float(opts.get("sat_max_age", meta.get("sat_max_age", 20))) if fast else None
     raw = read_many(_expand(iv2))
     cut = pd.Timestamp(at, tz="UTC") if at else None
     if cut is not None:
@@ -132,13 +143,23 @@ def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=(), is
     m = F5.minute_frame(pl, w)
     s = read_satellite(sat) if (sat and meta.get("uses_satellite")) else None
     if s is not None and cut is not None:
-        s = s[s.index <= cut - pd.Timedelta(minutes=meta.get("sat_delay", 30))]
-    f, _, valid, P15 = F5.build(m, f"{step}min", s, meta.get("sat_delay", 30), with_targets=False)
+        s = s[s.index <= cut - pd.Timedelta(minutes=sat_delay)]
+    if fast:
+        f, _, valid, P15 = F5.build(m, f"{step}min", s, sat_delay, with_targets=False, fast=True,
+                                    ewma_min=float(opts.get("ewma_min", meta.get("ewma_min", 2.0))),
+                                    baseline=opts.get("baseline", meta.get("baseline", "ewma")), sat_max_age=max_age)
+    else:
+        f, _, valid, P15 = F5.build(m, f"{step}min", s, sat_delay, with_targets=False)
     if t0 not in f.index or pd.isna(f.loc[t0, "k"]) or f.loc[t0, "P_valid15"] < 0.8:
         raise SystemExit("Not enough plant data in the last 15 minutes")
+    sat_age = None
+    if s is not None and len(s.dropna(how="all")):
+        sat_age = round((t0 - s.dropna(how="all").index.max()).total_seconds() / 60, 1)
+    if fast and meta.get("uses_satellite") and (sat_age is None or sat_age > max_age or pd.isna(f.loc[t0].get("sat_kt_C"))):
+        raise SatelliteTooOld(sat_age)
     out = {"issued_utc": t0.strftime("%Y-%m-%d %H:%M"), "P_now_MW": round(float(P15.loc[t0]), 2),
            "inverters_online": int(round(float(m.loc[t0, "n_inv_online"]))) if pd.notna(m.loc[t0, "n_inv_online"]) else None,
-           "live_minutes_used": n_live}
+           "live_minutes_used": n_live, "sat_age_min": sat_age, "model_version": str(meta.get("version", 2))}
     for h in F5.HORIZONS_MIN:
         mdl, cols = models[h]
         x = f.loc[[t0]].reindex(columns=cols)

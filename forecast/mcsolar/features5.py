@@ -35,8 +35,15 @@ def minute_frame(pl, w=None):
     return m
 
 
-def build(m, step="5min", sat=None, sat_delay=30, bad_days=(), with_targets=True):
-    """m: regular 1-min frame from minute_frame (may extend into the future for clear-sky columns)."""
+def build(m, step="5min", sat=None, sat_delay=30, bad_days=(), with_targets=True, fast=False, ewma_min=2.0,
+          baseline="ewma", sat_max_age=None, bad_minutes=None):
+    """m: regular 1-min frame from minute_frame (may extend into the future for clear-sky columns).
+
+    v2 = the defaults. v2.1 (fast=True) adds a fast baseline (EWMA of the 1-minute clear-sky fraction with time
+    constant `ewma_min`, or the plain last minute with baseline="mean1"), rate-of-change and per-station early-warning
+    features; satellite values older than `sat_max_age` minutes are dropped (sat_age_min says how old the used one is);
+    `bad_minutes` (exclude.bad_minutes) removes outage / curtailment / trip minutes from the training rows.
+    """
     cs = m["Pcs"]
     P = m["P"]
     P15, cs15 = _roll(P, 15), _roll(cs, 15)
@@ -86,8 +93,10 @@ def build(m, step="5min", sat=None, sat_delay=30, bad_days=(), with_targets=True
             f[f"kt_{s}_d5"] = kt5 - kt15
     if "w_tmod" in m and "w_tamb" in m:
         f["t_rise"] = _roll(m["w_tmod"] - m["w_tamb"], 15)
+    if fast:
+        f = f.join(fast_features(m, f, cs, ewma_min, baseline))
     if sat is not None:
-        f = f.join(satellite_features(sat, m["ghi_cs"], sat_delay))
+        f = f.join(satellite_features(sat, m["ghi_cs"], sat_delay, sat_max_age, with_age=fast))
     # known in advance: clear sky and sun height over each target window
     for h in HORIZONS_MIN:
         f[f"Pcs_f{h}"] = _lag(cs15, -h)
@@ -97,16 +106,72 @@ def build(m, step="5min", sat=None, sat_delay=30, bad_days=(), with_targets=True
     valid &= ~m.index.floor("D").isin(pd.DatetimeIndex(bad_days))
     targets = {}
     if with_targets:
+        ok = None
+        if bad_minutes is not None:
+            from .exclude import row_ok
+            ok = row_ok(bad_minutes.reindex(m.index).fillna(False), HORIZONS_MIN)
         for h in HORIZONS_MIN:
+            vf = _lag(valid.astype(float), -h).fillna(0) > 0.5
+            if ok is not None:
+                vf &= ok[h]
             targets[h] = pd.DataFrame({"P_future": _lag(P15, -h), "Pcs_future": _lag(cs15, -h),
-                                       "valid_future": _lag(valid.astype(float), -h).fillna(0) > 0.5}, index=m.index)
+                                       "valid_future": vf}, index=m.index)
     keep = m.index[(m.index.minute % int(pd.Timedelta(step).total_seconds() // 60)) == 0]
     f = f.loc[keep]
     return f, {h: t.loc[keep] for h, t in targets.items()}, valid.loc[keep], P15.loc[keep]
 
 
-def satellite_features(sat, ghi_cs_1min, delay_min=30):
-    """sat: frame from satellite.read_satellite (10-min). Values usable delay_min after their time stamp."""
+def fast_features(m, f, cs, ewma_min=2.0, baseline="ewma"):
+    """v2.1: what the plant did in the last minutes, weighted to the newest minute."""
+    out = pd.DataFrame(index=m.index)
+    kl = f["k_last"]
+    recent = kl.notna().astype(float).rolling("3min").sum() > 0       # no baseline across a data gap
+
+    def base(s):
+        if baseline == "mean1" or not ewma_min or ewma_min <= 0:
+            return s
+        a = 1 - np.exp(-1.0 / float(ewma_min))
+        return s.ewm(alpha=a, adjust=False, ignore_na=True).mean().where(recent)
+
+    kb = base(kl)
+    out["k_ewma"] = kb
+    out["dk_ewma"] = kb - f["k"]                         # newest minutes vs the 15-min mean (positive = rising)
+    out["dk_ewma5"] = kb - f["k5"]
+    out["k_slope5"] = (kb - _lag(kb, 5)) / 5             # per minute
+    out["k_slope2"] = (kb - _lag(kb, 2)) / 2
+    out["k_min5"] = _roll(kl, 5, "min")
+    out["k_drop15"] = _roll(kl, 15, "max") - kb          # how far below the best of the last 15 minutes
+    sts = []
+    for s in STATIONS:
+        if f"P_{s}" in m:
+            share = m[f"cap_{s}"].dropna().iloc[0] / 16.64 if m[f"cap_{s}"].notna().any() else 0.25
+            k1 = (m[f"P_{s}"] / (cs * share).clip(lower=0.1)).clip(0, 1.3)
+            out[f"k1_{s}"] = base(k1)
+            out[f"dk1_{s}"] = out[f"k1_{s}"] - f[f"k_{s}"]       # newest minutes vs the station's 15-min mean
+            sts.append(s)
+    if sts:
+        k1 = out[[f"k1_{s}" for s in sts]]
+        d1 = out[[f"dk1_{s}" for s in sts]]
+        out["k1_station_min"] = k1.min(axis=1)
+        out["k1_station_max"] = k1.max(axis=1)
+        out["dk1_station_min"] = d1.min(axis=1)             # the station falling fastest (cloud edge arriving)
+        out["n_station_dropping"] = (d1 < -0.1).sum(axis=1).where(d1.notna().any(axis=1))
+        out["n_station_rising"] = (d1 > 0.1).sum(axis=1).where(d1.notna().any(axis=1))
+    gcs = m["ghi_cs"].clip(lower=50)
+    for s in ("sts1", "sts3"):
+        c = f"w_ghi_{s}"
+        if c in m:
+            kt1 = base((m[c] / gcs).clip(0, 1.6))
+            out[f"kt1_{s}"] = kt1
+            out[f"dkt1_{s}"] = kt1 - f[f"kt5_{s}"] if f"kt5_{s}" in f else np.nan
+    return out
+
+
+def satellite_features(sat, ghi_cs_1min, delay_min=30, max_age_min=None, with_age=False):
+    """sat: frame from satellite.read_satellite (10-min). Values usable delay_min after their time stamp.
+
+    max_age_min=None keeps the v2 rule (a value is used for up to 40 minutes after it becomes usable). With max_age_min,
+    a value is used only while (issue time - its time stamp) <= max_age_min; with_age adds that age (sat_age_min)."""
     g = sat.copy()
     g.index = g.index + pd.Timedelta(minutes=delay_min)            # when each value becomes usable
     cs = ghi_cs_1min.reindex(sat.index, method="nearest").clip(lower=50).values
@@ -124,4 +189,16 @@ def satellite_features(sat, ghi_cs_1min, delay_min=30):
     f["sat_kt_C_d30"] = f["sat_kt_C"] - f["sat_kt_C"].shift(3)
     f["sat_ring_minus_C"] = f["sat_kt_r20_mean"] - f["sat_kt_C"]
     # as-of join onto the 1-minute timeline (latest usable satellite value at each minute)
-    return f.reindex(ghi_cs_1min.index, method="ffill", limit=40)
+    if max_age_min is None and not with_age:
+        return f.reindex(ghi_cs_1min.index, method="ffill", limit=40)
+    f = f[f["sat_kt_C"].notna()]
+    stamp = pd.Series(f.index - pd.Timedelta(minutes=delay_min), index=f.index)
+    idx = ghi_cs_1min.index
+    out = f.reindex(idx, method="ffill")
+    age = (idx - pd.DatetimeIndex(stamp.reindex(idx, method="ffill"))).total_seconds() / 60
+    age = pd.Series(age, index=idx)
+    lim = max_age_min if max_age_min is not None else delay_min + 40
+    out.loc[~(age <= lim).values, :] = np.nan
+    if with_age:
+        out["sat_age_min"] = age.where(age <= lim)
+    return out

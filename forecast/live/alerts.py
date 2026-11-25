@@ -413,6 +413,27 @@ def main():
                                timeout=600, capture_output=True)
             except Exception:
                 pass
+    # catch-up retrain: the 4-weekly Sunday retrain did not run (PC asleep / offline) -> start it at night, in the background
+    if now.hour >= 20:
+        try:
+            st = os.path.join(live, "retrain_state.json")
+            if os.path.exists(st):
+                with open(st, encoding="utf-8") as fh:
+                    last = datetime.strptime(json.load(fh)["last_run_utc"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            else:
+                lg = os.path.join(live, "retrain_log.txt")
+                last = datetime.fromtimestamp(os.path.getmtime(lg), timezone.utc) if os.path.exists(lg) else None
+            lock = os.path.join(live, "retrain_started.txt")
+            recent = os.path.exists(lock) and (now.timestamp() - os.path.getmtime(lock)) < 12 * 3600
+            if last is not None and now - last > timedelta(days=30) and not recent:
+                import subprocess
+                with open(lock, "w", encoding="utf-8") as fh:
+                    fh.write(now.strftime("%Y-%m-%d %H:%M"))
+                subprocess.Popen([sys.executable, "-W", "ignore", os.path.join(HERE, "retrain_monthly.py"), "--config", a.config],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0))
+        except Exception:
+            pass
     # daily DC string check (string_check.py), once after 14:00 GMT on the midday window
     if now.hour >= 14:
         sc = os.path.join(live, f"string_check_{now:%Y%m%d}.json")

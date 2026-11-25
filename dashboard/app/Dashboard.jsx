@@ -154,7 +154,7 @@ function LiveSection({ live, trimNight = false }) {
         <div style={{ textAlign: "right" }}>
           <span className="status"><span className={`dot ${!w ? "off" : nFresh ? "ok" : "stale"}`} />{w ? `Live · read ${n.ageS} s ago` : "Waiting for the live poller"}</span>{" "}
           <span className="status"><span className={`dot ${state}`} />{stateText}</span>
-          {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} GMT ({fAge} min ago) · model: {f.model === "v2" ? "v2 · live plant + weather + satellite" : f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}</div>}
+          {f && <div className="sub" style={{ marginTop: 4 }}>Last forecast {hhmm(f.issued)} GMT ({fAge} min ago) · model: {f.model === "v2.1" ? `v2.1 · live plant (${f.baseline || "fast baseline"}) + weather${f.satellite ? " + satellite" : ", satellite too old: not used"}` : f.model === "v2" ? "v2 · live plant + weather + satellite" : f.model === "satellite" ? "plant + weather + satellite" : f.model === "weather" ? "plant + weather station" : f.model}{f.sat_age_min != null ? ` · satellite ${Math.round(f.sat_age_min)} min old${f.sat_max_age_min != null ? ` (limit ${Math.round(f.sat_max_age_min)})` : ""}` : ""}</div>}
         </div>
       </div>
 

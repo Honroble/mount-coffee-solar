@@ -8,5 +8,10 @@
   "live_dir": "../../data/live",
   "forecast_issue_every_min": 1,
   "satellite_refresh_min": 5,
-  "sheet_every_min": 5
+  "sheet_every_min": 5,
+  "forecast_model": "v2",
+  "baseline_mode": "ewma",
+  "baseline_ewma_min": 2,
+  "satellite_max_age_min": 20,
+  "satellite_delay_min": 20
 }

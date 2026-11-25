@@ -520,7 +520,9 @@ def build(live, now):
         entry = {"key": key, "label": label, "unit": unit, "family": family, "overall": overall,
                  "provisional": overall.get("days", 0) < MIN_DAYS[family], "min_days": MIN_DAYS[family],
                  "by_sky": grouped(ss, lambda s: days.get(date_of(s), {}).get("sky"), unit, refs),
-                 "by_month": grouped(ss, lambda s: date_of(s)[:7], unit, refs)}
+                 "by_month": grouped(ss, lambda s: date_of(s)[:7], unit, refs),
+                 # each forecast row carries its model label (v2, v2.1, ...): scored separately, same samples and rules
+                 "by_model": grouped(ss, lambda s: s.get("model"), unit, refs)}
         if unit == "MW":
             entry["by_hour"] = grouped(ss, lambda s: (from_min(s["target"] - 1)).hour, unit, refs)
         products.append(entry)

@@ -67,9 +67,25 @@ function recentLogger(group, now) {
   return [...readLogger(group, yesterday), ...readLogger(group, now)];
 }
 
+// forecast_meta.csv (side file, v2.1): satellite age and baseline for each forecast, by issue time
+function readForecastMeta() {
+  const text = readText(path.join(LIVE_DIR, "forecast_meta.csv"));
+  const out = {};
+  if (!text) return out;
+  const rows = parseCsv(text);
+  const head = rows[0];
+  for (const r of rows.slice(-200)) {
+    const o = {};
+    head.forEach((h, i) => (o[h] = r[i] ?? ""));
+    if (o.issued_utc) out[o.issued_utc] = o;
+  }
+  return out;
+}
+
 function readForecasts(now) {
   const text = readText(path.join(LIVE_DIR, "forecast_log.csv"));
   if (!text) return [];
+  const meta = readForecastMeta();
   const rows = parseCsv(text);
   const head = rows[0];
   const since = now.getTime() - 26 * 3600000;
@@ -83,6 +99,8 @@ function readForecasts(now) {
       cs15: num(o.clear_sky_15min_mw), cs30: num(o.clear_sky_30min_mw), cs60: num(o.clear_sky_60min_mw),
       inverters_online: num(o.inverters_online), model: o.model, satellite: o.satellite_used === "True",
       status: o.status,
+      sat_age_min: num(meta[o.issued_utc]?.sat_age_min), sat_max_age_min: num(meta[o.issued_utc]?.sat_max_age_min),
+      baseline: meta[o.issued_utc]?.baseline || null,
     };
   }).filter((f) => f.issued && new Date(f.issued).getTime() >= since);
 }

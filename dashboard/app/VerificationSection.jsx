@@ -140,6 +140,21 @@ export default function VerificationSection() {
               </tbody>
             </table>
             <div className="sub">Sky type of a day = its energy ÷ clear-sky potential: sunny ≥ {data.rules?.sky_classes?.sunny}, mixed ≥ {data.rules?.sky_classes?.mixed}, cloudy below.</div>
+            {sel.by_model && Object.keys(sel.by_model).length > 0 && (
+              <>
+                <h3 style={{ margin: "12px 0 4px", fontSize: 14 }}>By model</h3>
+                <table>
+                  <thead><tr><th>Model</th><th className="num">Days</th><th className="num">Forecasts</th><th className="num">MAE</th><th className="num">Bias</th><th className="num">Skill</th></tr></thead>
+                  <tbody>
+                    {Object.entries(sel.by_model).map(([m, o]) => (
+                      <tr key={m}><td>{m}</td><td className="num">{o.days}</td><td className="num">{o.n}</td><td className="num">{f(o.mae)} {sel.unit}</td><td className="num">{signed(o.bias)}</td>
+                        <td className="num">{refName && o.refs?.[refName] ? `${f(o.refs[refName].skill_pct, 0)} %` : "—"}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="sub">Each forecast row is labelled with the model that made it, so models are scored on their own forecasts, under the same rules.</div>
+              </>
+            )}
             {sel.by_month && Object.keys(sel.by_month).length > 0 && (
               <>
                 <h3 style={{ margin: "12px 0 4px", fontSize: 14 }}>By month</h3>

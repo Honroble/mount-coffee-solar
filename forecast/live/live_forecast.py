@@ -30,7 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # the forecast folder
 sys.path.insert(0, ROOT)
 
-from forecast import make_forecast, make_forecast_v2  # noqa: E402
+from forecast import make_forecast, make_forecast_v2, SatelliteTooOld  # noqa: E402
 
 FIELDS = ["issued_utc", "p_now_mw", "p_15min_mw", "p_30min_mw", "p_60min_mw", "clear_sky_15min_mw",
           "clear_sky_30min_mw", "clear_sky_60min_mw", "inverters_online", "model", "satellite_used", "status"]
@@ -69,6 +69,32 @@ def fetch_satellite(live_dir, refresh_min=0):
         if os.path.exists(out) and (datetime.now().timestamp() - os.path.getmtime(out)) < 3 * 3600:
             return out
         return None
+
+
+def satellite_age(sat, now=None):
+    """Minutes between now and the time stamp of the newest satellite value in the file (None if no file)."""
+    try:
+        with open(sat, encoding="utf-8") as fh:
+            rows = list(csv.reader(fh))
+        stamps = [r[0] for r in rows[1:] if any(x.strip() for x in r[1:])]
+        t = datetime.strptime(stamps[-1][:16], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        return round(((now or datetime.now(timezone.utc)) - t).total_seconds() / 60, 1)
+    except Exception:
+        return None
+
+
+META_FIELDS = ["issued_utc", "model", "model_file", "satellite_used", "sat_age_min", "sat_max_age_min", "baseline", "note"]
+
+
+def write_meta(live, r):
+    """Side file next to forecast_log.csv (not part of the sealed logs): how each forecast was made."""
+    path = os.path.join(live, "forecast_meta.csv")
+    new = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=META_FIELDS)
+        if new:
+            w.writeheader()
+        w.writerow({k: r.get(k, "") for k in META_FIELDS})
 
 
 def send_to_sheet(cfg, row):
@@ -144,11 +170,17 @@ def main():
     iv1 = cfg.get("iv1_override") or recent(live, "iv1")
     every = max(1, int(cfg.get("forecast_issue_every_min", 5)))
     sat = cfg.get("sat_override") or fetch_satellite(live, float(cfg.get("satellite_refresh_min", 5)))
-    models = [("v2", "mcsolar_model_v2.joblib", True, True),
+    # forecast_model "v2.1" = new model (fast baseline, satellite age limit, no-satellite fallback); "v2" = rollback
+    use = str(cfg.get("forecast_model", "v2")).strip()
+    v21 = [("v2.1", "mcsolar_model_v21.joblib", True, True), ("v2.1", "mcsolar_model_v21_nosat.joblib", True, False)]
+    opts = {"ewma_min": float(cfg.get("baseline_ewma_min", 2)), "baseline": cfg.get("baseline_mode", "ewma"),
+            "sat_max_age": float(cfg.get("satellite_max_age_min", 20))}
+    sat_age = satellite_age(sat, datetime.strptime(a.at, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc) if a.at else None)
+    models = (v21 if use == "v2.1" else []) + [("v2", "mcsolar_model_v2.joblib", True, True),
               ("satellite", "mcsolar_model_satellite.joblib", True, True),
               ("weather", "mcsolar_model_weather.joblib", True, False),
               ("plant", "mcsolar_model.joblib", False, False)]
-    row, errors = None, []
+    row, errors, meta_row = None, [], None
     if not iv2:
         errors.append("no live plant data yet - is the collector running?")
     for name, fname, need_iv1, need_sat in models:
@@ -158,7 +190,10 @@ def main():
         if not os.path.exists(path):
             continue
         try:
-            if name == "v2":
+            if name == "v2.1":
+                fc = make_forecast_v2(path, iv2, iv1, sat if need_sat else None, a.at, [] if a.at else recent_now(live),
+                                      every, opts)
+            elif name == "v2":
                 fc = make_forecast_v2(path, iv2, iv1, sat, a.at, [] if a.at else recent_now(live), every)
             else:
                 fc = make_forecast(path, iv2, iv1 if need_iv1 else [], sat if need_sat else None, a.at)
@@ -170,7 +205,15 @@ def main():
             age = datetime.now(timezone.utc) - datetime.strptime(fc["issued_utc"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
             if not a.at and age > timedelta(minutes=45):
                 row["status"] = f"stale data ({int(age.total_seconds() // 60)} min old)"
+            meta_row = {"issued_utc": fc["issued_utc"], "model": name, "model_file": fname, "satellite_used": bool(need_sat),
+                        "sat_age_min": fc.get("sat_age_min") if fc.get("sat_age_min") is not None else sat_age,
+                        "sat_max_age_min": opts["sat_max_age"] if name == "v2.1" else "",
+                        "baseline": f"{opts['baseline']} {opts['ewma_min']:g} min" if name == "v2.1" else "15-min mean",
+                        "note": "; ".join(errors)[:200]}
             break
+        except SatelliteTooOld as e:
+            sat_age = e.age
+            errors.append(f"{name}: {e}, using the no-satellite model")
         except BaseException as e:   # SystemExit from make_forecast too
             errors.append(f"{name}: {e}")
     if row is None:
@@ -196,6 +239,8 @@ def main():
                 w.writeheader()
             w.writerow(row)
         logged.append({k: str(v) for k, v in row.items()})
+        if meta_row:
+            write_meta(live, meta_row)
     sent = "not sent (--no-send)"
     if not a.no_send:
         # warn the operators straight away if output is forecast to fall below 1 MW (alerts.py decides, sends once per drop)
