@@ -52,9 +52,17 @@ def stamp(r):
         return None
 
 
-def find_gaps(day, body):
+def find_gaps(day, body, now=None):
+    """Missing spans (exclusive ends) in the day, including before the first and after the last saved minute.
+    The end of today stops 5 minutes before now (the collector is still appending there)."""
+    start = datetime(day.year, day.month, day.day) - timedelta(minutes=1)
+    end = start + timedelta(days=1, minutes=1)
+    now = now or datetime.utcnow()
+    if end > now:
+        end = now - timedelta(minutes=5)
     have = sorted({s.replace(second=0) for s in (stamp(r) for r in body) if s and s.date() == day})
-    if not have:
+    have = [start] + [t for t in have if start < t < end] + [end]
+    if end <= start:
         return []
     gaps, prev = [], have[0]
     for t in have[1:]:
@@ -62,6 +70,17 @@ def find_gaps(day, body):
             gaps.append((prev, t))
         prev = t
     return gaps
+
+
+def nearest_file(live, prefix, day):
+    best = None
+    for f in os.listdir(live):
+        m = re.fullmatch(prefix + r"_live_(\d{8})\.csv", f)
+        if m:
+            d = abs((datetime.strptime(m.group(1), "%Y%m%d").date() - day).days)
+            if best is None or d < best[0]:
+                best = (d, os.path.join(live, f))
+    return best[1] if best else None
 
 
 def main():
@@ -74,7 +93,7 @@ def main():
     a = ap.parse_args()
     cfg = load_config(a.config)
     live = cfg["live_dir"]
-    today = datetime.utcnow().date()
+    today = datetime.utcnow().date()  # noqa: DTZ003
     days = [datetime.strptime(d, "%Y-%m-%d").date() for d in a.date] if a.date else [today - timedelta(days=1), today]
     sp = os.path.join(live, "fill_gaps_state.json")
     try:
@@ -85,10 +104,16 @@ def main():
     for day in days:
         for prefix in a.files:
             path = os.path.join(live, f"{prefix}_live_{day:%Y%m%d}.csv")
+            template = path
             if not os.path.exists(path):
-                print(f"{prefix} {day}: no file")
-                continue
-            head, units, body = read_rows(path)
+                template = nearest_file(live, prefix, day)      # same channels as the nearest day's file
+                if not template:
+                    print(f"{prefix} {day}: no file, and no other {prefix} file to copy the channel list from")
+                    continue
+                print(f"{prefix} {day}: no file - will create it with the channels of {os.path.basename(template)}")
+            head, units, body = read_rows(template)
+            if template != path:
+                body = []
             gaps = find_gaps(day, body)
             if a.auto:
                 gaps = [g for g in gaps if tried.get(f"{prefix} {g[0]:%Y-%m-%d %H:%M}-{g[1]:%H:%M}", 0) < 2]
@@ -100,7 +125,7 @@ def main():
             if a.dry_run:
                 continue
             group = group_of(prefix)
-            chans = [c for c in (file_channels(path) or []) if not re.search(r"cmd|Execute|select|Cancel|operation", c, re.I)]
+            chans = [c for c in (file_channels(template) or []) if not re.search(r"cmd|Execute|select|Cancel|operation", c, re.I)]
             if not group or not chans:
                 print(f"  skipped: no logger group/channels for {prefix}")
                 continue
@@ -135,7 +160,7 @@ def main():
             if not added:
                 print("  nothing new from the logger (it may no longer hold those minutes)")
                 continue
-            _, _, body = read_rows(path)                   # re-read: the collector may have appended meanwhile
+            body = read_rows(path)[2] if os.path.exists(path) else []   # re-read: the collector may have appended
             have = {stamp(r) for r in body}
             merged = sorted(body + [r for r in added if stamp(r) not in have], key=lambda r: stamp(r) or datetime.min)
             tmp = path + ".tmp"
