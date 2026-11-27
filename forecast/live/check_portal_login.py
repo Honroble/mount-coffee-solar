@@ -23,8 +23,28 @@ if other:
     print("note: a password is also saved under the user name without spaces")
 
 s = requests.Session()
-r = s.get(f"{PORTAL}/login", timeout=60)
-form = next(f for f in forms_of(r.text) if any(i["type"] == "password" for i in f["inputs"]))
+try:
+    r = s.get(f"{PORTAL}/login", timeout=60)
+except Exception as e:
+    print(f"could not reach the portal: {e}")
+    print("-> a network problem on this PC (not the password). Try again in a minute.")
+    sys.exit(1)
+form = next((f for f in forms_of(r.text) if any(i["type"] == "password" for i in f["inputs"])), None)
+if form is None:
+    import re
+    from portal_collector import load_config
+    page = os.path.join(load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"))["live_dir"],
+                        "portal_login_page.html")
+    try:
+        with open(page, "w", encoding="utf-8") as fh:
+            fh.write(r.text)
+    except OSError:
+        page = "(could not save)"
+    title = re.search(r"<title>(.*?)</title>", r.text, re.S | re.I)
+    print(f"the login page has no password box: HTTP {r.status_code}, ended at {r.url}, "
+          f"title {title.group(1).strip()[:80] if title else '(none)'!r}, {len(r.text)} characters")
+    print(f"page saved to {page} - the portal's sign-in page has changed or is showing a notice")
+    sys.exit(2)
 print("login form fields   :", [(i["name"], i["type"], i["value"] if i["type"] != "password" else "") for i in form["inputs"]])
 print("cookies after GET   :", list(s.cookies.keys()))
 
