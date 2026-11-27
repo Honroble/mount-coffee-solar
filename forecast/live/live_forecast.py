@@ -174,7 +174,7 @@ def main():
     use = str(cfg.get("forecast_model", "v2")).strip()
     v21 = [("v2.1", "mcsolar_model_v21.joblib", True, True), ("v2.1", "mcsolar_model_v21_nosat.joblib", True, False)]
     opts = {"ewma_min": float(cfg.get("baseline_ewma_min", 2)), "baseline": cfg.get("baseline_mode", "ewma"),
-            "sat_max_age": float(cfg.get("satellite_max_age_min", 20))}
+            "sat_max_age": float(cfg.get("satellite_max_age_min", 30))}
     sat_age = satellite_age(sat, datetime.strptime(a.at, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc) if a.at else None)
     models = (v21 if use == "v2.1" else []) + [("v2", "mcsolar_model_v2.joblib", True, True),
               ("satellite", "mcsolar_model_satellite.joblib", True, True),
@@ -231,7 +231,16 @@ def main():
             logged = list(csv.DictReader(fh))
     # A run that starts late (PC asleep, busy) can find the same 15-minute block as the run before: log it once.
     duplicate = bool(logged) and logged[-1].get("issued_utc") == row["issued_utc"] and row["model"] != "none"
-    if not duplicate:
+    # Never add a row stamped on an earlier day, or older than the last logged one: earlier days are sealed by the
+    # Verification (a late row there shows as an integrity problem). Happened 27 Nov: after the PC woke, a stale
+    # 26 Nov 22:45 row was written a minute after 26 Nov was sealed.
+    run_day = (a.at[:10] if a.at else datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    skip = ""
+    if not duplicate and row["issued_utc"][:10] < run_day:
+        skip = "  (earlier day, not logged)"
+    elif not duplicate and logged and str(row["issued_utc"]) < str(logged[-1].get("issued_utc", "")):
+        skip = "  (older than the last logged row, not logged)"
+    if not duplicate and not skip:
         new = not os.path.exists(log)
         with open(log, "a", newline="", encoding="utf-8") as fh:
             w = csv.DictWriter(fh, fieldnames=FIELDS)
@@ -252,7 +261,7 @@ def main():
         sent = send_pending(cfg, live, logged, max(1, int(cfg.get("sheet_every_min", 5))))
     with open(os.path.join(live, "forecast_runs.txt"), "a", encoding="utf-8") as fh:
         fh.write(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC  {row['issued_utc']}  {row['status'][:120]}"
-                 f"{'  (duplicate, not logged again)' if duplicate else ''}  sheet: {sent}\n")
+                 f"{'  (duplicate, not logged again)' if duplicate else ''}{skip}  sheet: {sent}\n")
     print(json.dumps(row), "|", sent)
 
 

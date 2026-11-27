@@ -11,7 +11,8 @@ the logger, and command channels are never requested.
   python live\\fill_gaps.py --date 2026-11-23 --files grid inv ctrl
   python live\\fill_gaps.py --date 2026-11-23 --dry-run  # list the gaps, download nothing
   python live\\fill_gaps.py                               # yesterday and today
-  python live\\fill_gaps.py --auto                        # as run by alerts.py: skips spans already tried twice
+  python live\\fill_gaps.py --auto                        # as run by alerts.py (hourly): the last 7 days; skips spans
+                                                          #   already tried twice
 """
 import json
 import argparse
@@ -19,7 +20,7 @@ import csv
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -57,7 +58,7 @@ def find_gaps(day, body, now=None):
     The end of today stops 5 minutes before now (the collector is still appending there)."""
     start = datetime(day.year, day.month, day.day) - timedelta(minutes=1)
     end = start + timedelta(days=1, minutes=1)
-    now = now or datetime.utcnow()
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     if end > now:
         end = now - timedelta(minutes=5)
     have = sorted({s.replace(second=0) for s in (stamp(r) for r in body) if s and s.date() == day})
@@ -93,14 +94,17 @@ def main():
     a = ap.parse_args()
     cfg = load_config(a.config)
     live = cfg["live_dir"]
-    today = datetime.utcnow().date()  # noqa: DTZ003
-    days = [datetime.strptime(d, "%Y-%m-%d").date() for d in a.date] if a.date else [today - timedelta(days=1), today]
+    today = datetime.now(timezone.utc).replace(tzinfo=None).date()
+    back = 7 if a.auto else 1        # the hourly run looks back a week, so days missed while the PC was off are filled
+    days = ([datetime.strptime(d, "%Y-%m-%d").date() for d in a.date] if a.date
+            else [today - timedelta(days=i) for i in range(0, back + 1)])   # newest first
     sp = os.path.join(live, "fill_gaps_state.json")
     try:
         tried = json.load(open(sp, encoding="utf-8")) if a.auto else {}
     except Exception:
         tried = {}
     p = None
+    budget = 15 if a.auto else 10 ** 6   # downloads per hourly run (alerts.py has a time limit); the rest next hour
     for day in days:
         for prefix in a.files:
             path = os.path.join(live, f"{prefix}_live_{day:%Y%m%d}.csv")
@@ -139,6 +143,11 @@ def main():
                 tried[k] = tried.get(k, 0) + 1
                 t = g0
                 while t < g1:
+                    if budget <= 0:
+                        print("  download budget for this run used up; the rest is fetched next run")
+                        tried[k] -= 1                     # not a real try
+                        break
+                    budget -= 1
                     t2 = min(g1, t + timedelta(hours=CHUNK_H))
                     try:
                         header, rows = parse_csv(p.download(group, chans, t, t2))
@@ -158,7 +167,8 @@ def main():
                         seen.add(s)
                     t = t2
             if not added:
-                print("  nothing new from the logger (it may no longer hold those minutes)")
+                if budget > 0:
+                    print("  nothing new from the logger (it may no longer hold those minutes)")
                 continue
             body = read_rows(path)[2] if os.path.exists(path) else []   # re-read: the collector may have appended
             have = {stamp(r) for r in body}
@@ -172,7 +182,7 @@ def main():
             os.replace(tmp, path)
             print(f"  added {len(added)} minutes")
     if a.auto and not a.dry_run:
-        cutoff = (datetime.utcnow() - timedelta(days=10)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=10)).strftime("%Y-%m-%d")
         with open(sp, "w", encoding="utf-8") as fh:
             json.dump({k: v for k, v in tried.items() if k.split(" ")[1] >= cutoff}, fh)
     if p is not None:

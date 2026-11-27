@@ -47,6 +47,15 @@ def main():
     title = {"morning": "morning report", "evening": "evening report", "weekly": "weekly plant review"}[period]
     text = j["answer"].strip() + ("\n\n(Automatic report from the plant data.)" if j.get("free")
                                   else "\n\n(Written by the AI assistant from the plant data - read-only. Check before acting.)")
+    if period in ("morning", "weekly"):
+        try:                                   # how the monitoring itself did: data gaps, stopped jobs, skipped retrain
+            from health_check import check
+            hc = check(cfg["live_dir"], now, days=7 if period == "weekly" else 1)
+            problems = [l for l in hc if not l.startswith("OK")]
+            text += "\n\nSYSTEM SELF-CHECK - " + (f"{len(problems)} item(s) need attention:\n" + "\n".join(problems)
+                                                  if problems else "all OK") + "\n(Full list: python live\\health_check.py)"
+        except Exception as e:
+            text += f"\n\nSYSTEM SELF-CHECK could not run: {e}"
     if a.dry_run:
         print(text)
         return

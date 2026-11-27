@@ -23,6 +23,26 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 
+def fetch_satellite_history(sat, today, tries=3, wait_s=120, run=None):
+    """Download the satellite history into sat (via sat.new, so a failed download never damages the old copy).
+    Returns (path or None, note). The PC's internet / DNS is often not ready right after waking, hence the retries."""
+    run = run or subprocess.run
+    err = None
+    for attempt in range(tries):
+        try:
+            run([sys.executable, os.path.join(ROOT, "fetch_satellite.py"), "--start", "2026-09-17",
+                 "--end", today, "--out", sat + ".new"], check=True, capture_output=True, timeout=600)
+            shutil.move(sat + ".new", sat)
+            return sat, (f"satellite history downloaded on try {attempt + 1}" if attempt else "")
+        except Exception as e:
+            err = e
+            if attempt < tries - 1:
+                time.sleep(wait_s)
+    if os.path.exists(sat):
+        return sat, f"satellite history download failed {tries} times ({err}); using the existing copy"
+    return None, f"satellite history download failed ({err}); satellite models not retrained"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -38,27 +58,13 @@ def main():
     sat = os.path.join(data, "satellite_history.csv")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     report = [f"Retrain {today}: {len(iv2)} plant files, {len(iv1)} weather files"]
-    err = None
-    for attempt in range(3):            # the PC's internet / DNS is often not ready right after waking
-        try:
-            subprocess.run([sys.executable, os.path.join(ROOT, "fetch_satellite.py"), "--start", "2026-09-17",
-                            "--end", today, "--out", sat + ".new"], check=True, capture_output=True, timeout=600)
-            shutil.move(sat + ".new", sat)
-            err = None
-            break
-        except Exception as e:
-            err = e
-            time.sleep(120)
-    if err is not None:
-        if os.path.exists(sat):
-            report.append(f"satellite history download failed 3 times ({err}); using the existing copy")
-        else:
-            report.append(f"satellite history download failed ({err}); satellite models not retrained")
-            sat = None
+    sat, note = fetch_satellite_history(sat, today)
+    if note:
+        report.append(note)
     v21 = ["--version", "2.1", "--kpi", os.path.join(live, "kpi_daily.json"), "--trips", os.path.join(live, "trips.csv"),
            "--ctrl", *sorted(glob.glob(os.path.join(live, "ctrl_live_*.csv"))),
            "--ewma-min", str(cfg.get("baseline_ewma_min", 2)), "--baseline", str(cfg.get("baseline_mode", "ewma")),
-           "--sat-max-age", str(cfg.get("satellite_max_age_min", 20)), "--sat-delay", str(cfg.get("satellite_delay_min", 20))]
+           "--sat-max-age", str(cfg.get("satellite_max_age_min", 30)), "--sat-delay", str(cfg.get("satellite_delay_min", 20))]
     jobs = [("mcsolar_model.joblib", []), ("mcsolar_model_weather.joblib", ["--iv1", *iv1])]
     if sat:
         jobs.append(("mcsolar_model_satellite.joblib", ["--iv1", *iv1, "--sat", sat]))

@@ -152,7 +152,7 @@ def checks(cfg, live, now):
     head, iv2 = read_logger_today(live, "iv2", now)
     daytime = 7 <= now.hour < 18
     last_t = iv2[-1][0] if iv2 else None
-    if daytime and (last_t is None or now - last_t > timedelta(minutes=30)):
+    if daytime and (last_t is None or now - last_t > timedelta(minutes=15)):
         found.append(("stale", "stale", f"No plant data saved since {last_t:%H:%M} GMT." if last_t else "No plant data saved today."))
     # monitoring the monitoring: portal sign-in, live poller, forecast job
     try:
@@ -434,16 +434,23 @@ def main():
                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0))
         except Exception:
             pass
-    # daily DC string check (string_check.py), once after 14:00 GMT on the midday window
-    if now.hour >= 14:
-        sc = os.path.join(live, f"string_check_{now:%Y%m%d}.json")
-        if not os.path.exists(sc):
-            try:
-                import subprocess
-                subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "string_check.py"), "--config", a.config],
-                               timeout=900, capture_output=True)
-            except Exception:
-                pass
+    # daily DC string check (string_check.py), once after 14:00 GMT on the midday window; yesterday's is caught up
+    # (at most once an hour) when the PC was off or offline at 14:00 - the logger still holds the data
+    todo = []
+    if now.hour >= 14 and not os.path.exists(os.path.join(live, f"string_check_{now:%Y%m%d}.json")):
+        todo.append(None)
+    y = now - timedelta(days=1)
+    if not os.path.exists(os.path.join(live, f"string_check_{y:%Y%m%d}.json")) and \
+            (not state.get("string_catchup") or now - datetime.fromisoformat(state["string_catchup"]) > timedelta(minutes=60)):
+        state["string_catchup"] = now.isoformat()
+        todo.append(y.strftime("%Y-%m-%d"))
+    for d in todo:
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-W", "ignore", os.path.join(HERE, "string_check.py"), "--config", a.config]
+                           + (["--date", d] if d else []), timeout=900, capture_output=True)
+        except Exception:
+            pass
     # fill gaps inside yesterday's and today's 1-minute files from the logger (fill_gaps.py), at most once an hour
     if not a.dry_run and (not state.get("fill_gaps") or now - datetime.fromisoformat(state["fill_gaps"]) > timedelta(minutes=60)):
         state["fill_gaps"] = now.isoformat()

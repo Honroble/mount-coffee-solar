@@ -123,7 +123,7 @@ def make_forecast_v2(model_path, iv2, iv1=(), sat=None, at=None, now_csvs=(), is
     opts = opts or {}
     fast = bool(meta.get("fast"))                 # v2.1
     sat_delay = meta.get("sat_delay", 30)
-    max_age = float(opts.get("sat_max_age", meta.get("sat_max_age", 20))) if fast else None
+    max_age = float(opts.get("sat_max_age", meta.get("sat_max_age", 30))) if fast else None
     raw = read_many(_expand(iv2))
     cut = pd.Timestamp(at, tz="UTC") if at else None
     if cut is not None:

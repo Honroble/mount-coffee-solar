@@ -4,7 +4,7 @@ Usage:
     python train5.py --iv2 iv2_*.csv --iv1 iv1_*.csv --sat satellite.csv [--compare-old] [--out mcsolar_model_v2.joblib]
     v2.1 (issued every minute, fast baseline, cleaner training data, measured satellite delay):
     python train5.py --version 2.1 --iv2 ... --iv1 ... --sat satellite.csv --kpi live/kpi_daily.json --trips live/trips.csv
-                     [--ewma-min 2] [--sat-delay 20] [--sat-max-age 20] [--no-sat] [--until 2026-11-16] --out mcsolar_model_v21.joblib
+                     [--ewma-min 2] [--sat-delay 20] [--sat-max-age 30] [--no-sat] [--until 2026-11-16] --out mcsolar_model_v21.joblib
     --no-sat trains the v2.1 fallback used when the satellite data is older than the limit.
 
 Prints a blocked cross-validation report (2-week folds, a day of gap either side) and saves models trained
@@ -138,7 +138,7 @@ def main():
     ap.add_argument("--version", default="2", choices=["2", "2.1"])
     ap.add_argument("--ewma-min", type=float, default=2.0)
     ap.add_argument("--baseline", default="ewma", choices=["ewma", "mean1"])
-    ap.add_argument("--sat-max-age", type=float, default=20.0)
+    ap.add_argument("--sat-max-age", type=float, default=30.0)
     ap.add_argument("--no-sat", action="store_true")
     ap.add_argument("--kpi", help="kpi_daily.json (Verification day rules)")
     ap.add_argument("--trips", help="trips.csv")

@@ -60,7 +60,18 @@ def score(pred, P15, cs15, k15, keep_issue, label):
     return rows
 
 
-def reaction(pred, P1, t0, t1, min_drop=3.0):
+def trip_windows(live):
+    """[(start, end)] of logged trips (trips.csv), 20 min before the trip to 5 min after the restore."""
+    path = os.path.join(live, "trips.csv")
+    if not os.path.exists(path):
+        return []
+    t = pd.read_csv(path)
+    a = pd.to_datetime(t["trip_utc"]).dt.tz_localize("UTC")
+    b = pd.to_datetime(t["restored_utc"], errors="coerce").dt.tz_localize("UTC")
+    return [(x - pd.Timedelta("20min"), (y if pd.notna(y) else x + pd.Timedelta("3h")) + pd.Timedelta("5min")) for x, y in zip(a, b)]
+
+
+def reaction(pred, P1, t0, t1, min_drop=3.0, trips=()):
     """Sharp drops between t0 and t1: 1-min power falls by >= min_drop MW within 10 minutes. Onset = first minute of the
     fall. For each forecast: the first issue minute from 10 min before the onset at which its 15-min forecast is at
     least half the drop below what it said just before (minutes after the onset; negative = it saw it coming)."""
@@ -75,7 +86,8 @@ def reaction(pred, P1, t0, t1, min_drop=3.0):
             last = t
     out = []
     for on, b, p in drops:
-        row = {"onset": on.strftime("%H:%M"), "from_MW": round(b, 1), "to_MW": round(p, 1)}
+        row = {"onset": on.strftime("%Y-%m-%d %H:%M"), "from_MW": round(b, 1), "to_MW": round(p, 1),
+               "grid_trip": any(a0 <= on <= a1 for a0, a1 in trips)}   # a trip is not weather: no forecast can see it
         for name, pr in pred.items():
             ref = pr.get(on - pd.Timedelta(minutes=11))
             s = pr[on - pd.Timedelta(minutes=10): on + pd.Timedelta(minutes=30)]
@@ -106,13 +118,17 @@ def main():
         p.index = pd.to_datetime(p.index)
         from mcsolar.data import read_many, clean_plant
         P1 = clean_plant(read_many(g(a.test_iv2)))["P"]
-        for day in a.sharp_day.split(","):
-            d0 = pd.Timestamp(day, tz="UTC")
-            seen5 = p[("v2_every5", "15")].dropna().reindex(p.index, method="ffill", limit=4).shift(2)
-            rx = reaction({"v2_every5": seen5, "v2_every1": p[("v2_every1", "15")], "v2.1": p[("v2.1_age20", "15")]},
-                          P1, d0, d0 + pd.Timedelta("1D"))
-            print(f"\n== {day}: minutes after the onset until the 15-min forecast has fallen by half the drop")
-            print(pd.DataFrame(rx).to_string(index=False))
+        seen5 = p[("v2_every5", "15")].dropna().reindex(p.index, method="ffill", limit=4).shift(2)
+        v21 = [c for c in p.columns.get_level_values(0).unique() if c.startswith("v2.1_age")][-1]
+        rx = reaction({"v2_every5": seen5, "v2_every1": p[("v2_every1", "15")], "v2.1": p[(v21, "15")]},
+                      P1, p.index.min(), p.index.max(), trips=trip_windows(a.live))
+        df = pd.DataFrame(rx)
+        print(df.to_string(index=False))
+        c = df[~df["grid_trip"]]
+        print(f"\nCloud drops (grid trips left out): {len(c)};  grid trips: {int(df['grid_trip'].sum())}")
+        for k in ("v2_every5", "v2_every1", "v2.1"):
+            s_ = c[f"{k}_min_after_onset"]
+            print(f"  {k:<10} reacted to {s_.notna().sum()} of {len(c)}, median {s_.median():.0f} min after the onset")
         return
     kpi, trips = os.path.join(a.live, "kpi_daily.json"), os.path.join(a.live, "trips.csv")
     ctrl = glob.glob(os.path.join(a.live, "ctrl_live_*.csv"))
