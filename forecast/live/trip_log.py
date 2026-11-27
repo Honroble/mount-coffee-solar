@@ -126,7 +126,7 @@ def day_trips(live, date):
             before = [kw(ns, hhmm(x)) for x in range(m - 5, m)]
             before = [b for b in before if b is not None]
             if nf >= 0.8 * len(ns) and nf_prev < 0.5 * len(ns) and before and max(before) > need_kw:
-                if scope != "plant" and any(abs(m - x) <= 3 for x in busy):
+                if scope != "plant" and any(a0 - 3 <= m <= a1 + 3 for a0, a1 in busy):   # part of a plant trip
                     m += 1
                     continue
                 # restore: first minute with half the group back in Run (or producing again)
@@ -176,7 +176,7 @@ def day_trips(live, date):
                     "breakers": ", ".join(brk), "mw_before": round(mw0, 2), "energy_lost_mwh_est": round(lost / 1000, 2),
                 })
                 if scope == "plant":
-                    busy.add(m)
+                    busy.add((m, end if end else m + 120))
                 m = (end or m + 30) + 1
                 continue
             m += 1
@@ -205,7 +205,12 @@ def main():
                 old[(r["trip_utc"], r["scope"])] = r
     new, changed = [], False
     for d in dates:
-        for t in day_trips(live, d):
+        found = day_trips(live, d)
+        keys = {(t["trip_utc"], t["scope"]) for t in found}
+        for k in [k for k, r in old.items() if r.get("date") == d.isoformat() and k not in keys]:
+            del old[k]                   # no longer a separate trip (e.g. a station trip inside a plant trip)
+            changed = True
+        for t in found:
             key = (t["trip_utc"], t["scope"])
             prev = old.get(key)
             t["logged_utc"] = prev["logged_utc"] if prev else now.strftime("%Y-%m-%d %H:%M")
